@@ -1,21 +1,29 @@
 // frontend/src/components/SignalForm.tsx
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { fetchSignal, type TradeSignalResponse } from "../lib/api";
 import { LoadingSpinner } from "./LoadingSpinner";
 
 interface Props {
   onSignalLoaded: (signal: TradeSignalResponse | null) => void;
+  onSelectionChange?: (selection: { symbol: string; timeframe: string }) => void;
 }
 
 const DEFAULT_SYMBOLS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "XRP/USDT"];
 const DEFAULT_TIMEFRAMES = ["15m", "1h", "4h", "1d"];
 
-export const SignalForm: React.FC<Props> = ({ onSignalLoaded }) => {
+export const SignalForm: React.FC<Props> = ({
+  onSignalLoaded,
+  onSelectionChange,
+}) => {
   const [symbol, setSymbol] = useState("BTC/USDT");
   const [timeframe, setTimeframe] = useState("1h");
   const [demo, setDemo] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    onSelectionChange?.({ symbol, timeframe });
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,7 +66,10 @@ export const SignalForm: React.FC<Props> = ({ onSignalLoaded }) => {
           <select
             className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
             value={symbol}
-            onChange={(e) => setSymbol(e.target.value)}
+          onChange={(e) => {
+            setSymbol(e.target.value);
+            onSelectionChange?.({ symbol: e.target.value, timeframe });
+          }}
           >
             {DEFAULT_SYMBOLS.map((s) => (
               <option key={s}>{s}</option>
@@ -71,7 +82,10 @@ export const SignalForm: React.FC<Props> = ({ onSignalLoaded }) => {
           <select
             className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
             value={timeframe}
-            onChange={(e) => setTimeframe(e.target.value)}
+          onChange={(e) => {
+            setTimeframe(e.target.value);
+            onSelectionChange?.({ symbol, timeframe: e.target.value });
+          }}
           >
             {DEFAULT_TIMEFRAMES.map((tf) => (
               <option key={tf}>{tf}</option>

@@ -30,7 +30,33 @@ class BacktestResponse(BaseModel):
     start: datetime
     end: datetime
     win_rate: float
-    total_return: float
-    max_drawdown: float
+    total_return_pct: float
+    max_drawdown_pct: float
     profit_factor: float
     trades_count: int
+
+
+class CandleWithIndicators(BaseModel):
+    timestamp: datetime
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
+    ema20: Optional[float] = None
+    ema50: Optional[float] = None
+    ema200: Optional[float] = None
+    rsi14: Optional[float] = None
+    macd: Optional[float] = None
+    macd_signal: Optional[float] = None
+    macd_hist: Optional[float] = None
+    bb_high: Optional[float] = None
+    bb_low: Optional[float] = None
+    bb_mid: Optional[float] = None
+    bb_width: Optional[float] = None
+
+
+class CandlesResponse(BaseModel):
+    symbol: str
+    timeframe: str
+    candles: List[CandleWithIndicators]

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import datetime
-from pathlib import Path
-from typing import Iterable, Optional
+from typing import Optional
 
 import pandas as pd
 
@@ -48,21 +48,36 @@ class DataRepository:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     symbol TEXT NOT NULL,
                     timeframe TEXT NOT NULL,
-                    strategy_name TEXT NOT NULL,
-                    start_ts INTEGER NOT NULL,
-                    end_ts INTEGER NOT NULL,
-                    win_rate REAL,
-                    total_return REAL,
-                    max_drawdown REAL,
-                    profit_factor REAL,
-                    trades_count INTEGER,
+                    strategy TEXT NOT NULL,
+                    start INTEGER NOT NULL,
+                    end INTEGER NOT NULL,
+                    metrics_json TEXT,
                     created_at INTEGER NOT NULL
                 )
                 """,
             )
+            self._migrate_backtests_table(cur)
             conn.commit()
         finally:
             conn.close()
+
+    def _migrate_backtests_table(self, cur: sqlite3.Cursor) -> None:
+        """Add any missing columns for the backtests table without dropping data."""
+        required_columns = {
+            "strategy": "TEXT NOT NULL DEFAULT ''",
+            "start": "INTEGER NOT NULL DEFAULT 0",
+            "end": "INTEGER NOT NULL DEFAULT 0",
+            "metrics_json": "TEXT",
+            "created_at": "INTEGER NOT NULL DEFAULT 0",
+        }
+        existing_columns = {
+            row[1] for row in cur.execute("PRAGMA table_info(backtests)").fetchall()
+        }
+        for column_name, column_type in required_columns.items():
+            if column_name not in existing_columns:
+                cur.execute(
+                    f"ALTER TABLE backtests ADD COLUMN {column_name} {column_type}"
+                )
 
     def save_candles(
         self,
@@ -129,5 +144,35 @@ class DataRepository:
             if not df.empty:
                 df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s")
             return df
+        finally:
+            conn.close()
+
+    def save_backtest_result(
+        self,
+        symbol: str,
+        timeframe: str,
+        strategy: str,
+        start: datetime,
+        end: datetime,
+        metrics: dict,
+    ) -> None:
+        conn = self._connect()
+        try:
+            conn.execute(
+                """
+                INSERT INTO backtests (symbol, timeframe, strategy, start, end, metrics_json, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    symbol,
+                    timeframe,
+                    strategy,
+                    int(start.timestamp()),
+                    int(end.timestamp()),
+                    json.dumps(metrics),
+                    int(datetime.utcnow().timestamp()),
+                ),
+            )
+            conn.commit()
         finally:
             conn.close()
