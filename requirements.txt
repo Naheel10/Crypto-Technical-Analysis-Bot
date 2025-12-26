@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+pydantic>=2.0
+ccxt
+pandas
+ta
+python-dotenv
+httpx
+pytest

@@ -1,0 +1,7 @@
+@import "tailwindcss";
+
+/* Simple global styling without @apply to avoid Tailwind v4 quirks */
+body {
+  background-color: #020617; /* slate-950 */
+  color: #f9fafb;            /* slate-50 */
+}

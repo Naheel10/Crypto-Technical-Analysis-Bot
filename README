@@ -1,0 +1,35 @@
+# Crypto Technical Analysis Bot for Beginners
+
+Beginner friendly crypto trading assistant that turns raw price charts into clear **BUY / SELL / NO-TRADE** ideas.
+
+## What it does
+
+- Connects to real exchanges using `ccxt` and pulls live OHLCV candles.
+- Computes classic technical indicators like EMA, RSI, MACD, and Bollinger Bands.
+- Detects basic market regimes (uptrend, downtrend, range, choppy).
+- Runs a predefined library of TA strategies:
+  - Trend following continuation setups.
+  - Breakout style entries.
+  - Range trading mean reversion ideas.
+  - Simple RSI momentum filters.
+- Produces structured trade signals with entry zone, stop loss, and take profit levels.
+- Uses an **LLM powered explainable AI layer** to generate **human readable justifications** for each signal.
+
+This project is designed as an **educational and decision support tool**.  
+It is not financial advice and does not guarantee profit.
+
+## Architecture overview
+
+- **LLM powered explainable technical analysis for beginners.**
+- **Human readable trade rationales powered by large language models.**
+- **AI assisted regime detection and strategy selection.**
+- Modular Python package with:
+  - `bot/data` for exchange integration and local persistence.
+  - `bot/indicators` for indicator and feature engineering.
+  - `bot/strategy` for opinionated strategy implementations.
+  - `bot/engine` for market regime detection and strategy orchestration.
+  - `bot/backtest` for simple bar by bar backtesting and sanity checks.
+  - `bot/api` for FastAPI endpoints and JSON responses.
+  - `bot/ai` for LLM based explanations.
+
+The design is **container ready** and easy to extend into full **MLOps style pipelines** in future versions.
