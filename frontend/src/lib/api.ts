@@ -24,6 +24,19 @@ export interface TradeSignalResponse {
   simple_explanation: string | null;
 }
 
+export interface BacktestResponse {
+  symbol: string;
+  timeframe: string;
+  strategy_name: string;
+  start: string;
+  end: string;
+  win_rate: number;
+  total_return_pct: number;
+  max_drawdown_pct: number;
+  profit_factor: number;
+  trades_count: number;
+}
+
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
@@ -41,6 +54,28 @@ export async function fetchSignal(params: {
   if (!res.ok) {
     const text = await res.text();
     throw new Error(text || "Failed to fetch signal");
+  }
+  return res.json();
+}
+
+export async function fetchBacktest(params: {
+  symbol: string;
+  timeframe: string;
+  strategy: string;
+  start: string;
+  end: string;
+}): Promise<BacktestResponse> {
+  const url = new URL(`${API_BASE}/backtest`);
+  url.searchParams.set("symbol", params.symbol);
+  url.searchParams.set("timeframe", params.timeframe);
+  url.searchParams.set("strategy", params.strategy);
+  url.searchParams.set("start", params.start);
+  url.searchParams.set("end", params.end);
+
+  const res = await fetch(url.toString());
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || "Failed to fetch backtest");
   }
   return res.json();
 }

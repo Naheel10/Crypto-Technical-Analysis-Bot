@@ -30,7 +30,7 @@ class BacktestResponse(BaseModel):
     start: datetime
     end: datetime
     win_rate: float
-    total_return: float
-    max_drawdown: float
+    total_return_pct: float
+    max_drawdown_pct: float
     profit_factor: float
     trades_count: int

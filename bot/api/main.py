@@ -113,12 +113,30 @@ def run_backtest(
     if strategy_cls is None:
         raise HTTPException(status_code=400, detail="Unknown strategy")
 
-    result: BacktestResult = backtester.run_backtest(
+    try:
+        result: BacktestResult = backtester.run_backtest(
+            symbol=symbol,
+            timeframe=timeframe,
+            strategy_cls=strategy_cls,
+            start=start,
+            end=end,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    backtester.repository.save_backtest_result(
         symbol=symbol,
         timeframe=timeframe,
-        strategy_cls=strategy_cls,
+        strategy=strategy,
         start=start,
         end=end,
+        metrics={
+            "win_rate": result.win_rate,
+            "total_return_pct": result.total_return_pct,
+            "max_drawdown_pct": result.max_drawdown_pct,
+            "profit_factor": result.profit_factor,
+            "trades_count": result.trades_count,
+        },
     )
 
     return BacktestResponse(**result.__dict__)
