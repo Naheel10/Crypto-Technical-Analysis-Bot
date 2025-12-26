@@ -1,5 +1,6 @@
-cat > .gitignore << 'EOF'
+cat >> .gitignore << 'EOF'
 .venv/
+venv/
 frontend/node_modules/
 __pycache__/
 *.pyc
