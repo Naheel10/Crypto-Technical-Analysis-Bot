@@ -37,6 +37,25 @@ export interface BacktestResponse {
   trades_count: number;
 }
 
+export interface BacktestHistoryItem {
+  id: number;
+  created_at: string;
+  symbol: string;
+  timeframe: string;
+  strategy_name: string;
+  start: string;
+  end: string;
+  win_rate: number;
+  total_return_pct: number;
+  max_drawdown_pct: number;
+  profit_factor: number;
+  trades_count: number;
+}
+
+export interface RecentBacktestsResponse {
+  items: BacktestHistoryItem[];
+}
+
 export interface CandleWithIndicators {
   timestamp: string;
   open: number;
@@ -167,6 +186,21 @@ export async function fetchRecentSignals(
     throw new Error("Failed to fetch recent signals");
   }
   const data: RecentSignalsResponse = await res.json();
+  return data.items;
+}
+
+export async function fetchRecentBacktests(
+  limit: number = 20,
+): Promise<BacktestHistoryItem[]> {
+  const url = new URL(`${API_BASE}/backtests/recent`);
+  url.searchParams.set("limit", limit.toString());
+
+  const res = await fetch(url.toString());
+  if (!res.ok) {
+    throw new Error("Failed to fetch recent backtests");
+  }
+
+  const data: RecentBacktestsResponse = await res.json();
   return data.items;
 }
 

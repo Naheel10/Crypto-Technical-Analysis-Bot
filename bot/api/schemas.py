@@ -37,6 +37,25 @@ class BacktestResponse(BaseModel):
     trades_count: int
 
 
+class BacktestHistoryItem(BaseModel):
+    id: int
+    created_at: datetime
+    symbol: str
+    timeframe: str
+    strategy_name: str
+    start: datetime
+    end: datetime
+    win_rate: float
+    total_return_pct: float
+    max_drawdown_pct: float
+    profit_factor: float
+    trades_count: int
+
+
+class RecentBacktestsResponse(BaseModel):
+    items: list[BacktestHistoryItem]
+
+
 class CandleWithIndicators(BaseModel):
     timestamp: datetime
     open: float
@@ -82,6 +101,8 @@ class RecentSignalsResponse(BaseModel):
 __all__ = [
     "TradeSignalResponse",
     "BacktestResponse",
+    "BacktestHistoryItem",
+    "RecentBacktestsResponse",
     "CandleWithIndicators",
     "CandlesResponse",
     "SignalHistoryItem",

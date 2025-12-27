@@ -8,6 +8,7 @@ import { BacktestResultCard } from "./components/BacktestResultCard";
 import { ChartPanel } from "./components/ChartPanel";
 import { RecentSignalsPanel } from "./components/RecentSignalsPanel";
 import { RiskPanel } from "./components/RiskPanel";
+import { BacktestHistoryPanel } from "./components/BacktestHistoryPanel";
 import type { BacktestResponse, TradeSignalResponse } from "./lib/api";
 
 const App: React.FC = () => {
@@ -89,13 +90,17 @@ const App: React.FC = () => {
           </div>
         </div>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[2fr,1.2fr]">
-          <div className="space-y-4">
-            <BacktestForm onBacktestLoaded={setBacktestResult} />
+        <div className="space-y-4">
+          <div className="grid gap-6 lg:grid-cols-[2fr,1.2fr]">
+            <div className="space-y-4">
+              <BacktestForm onBacktestLoaded={setBacktestResult} />
+            </div>
+            <div className="space-y-4">
+              {backtestResult && <BacktestResultCard result={backtestResult} />}
+            </div>
           </div>
-          <div className="space-y-4">
-            {backtestResult && <BacktestResultCard result={backtestResult} />}
-          </div>
+
+          <BacktestHistoryPanel limit={15} />
         </div>
       )}
     </Layout>

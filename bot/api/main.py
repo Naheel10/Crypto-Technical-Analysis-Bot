@@ -12,8 +12,10 @@ from bot.ai.explanation import generate_explanation
 from bot.api.schemas import (
     CandlesResponse,
     BacktestResponse,
+    BacktestHistoryItem,
     PositionSizingRequest,
     PositionSizingResponse,
+    RecentBacktestsResponse,
     RecentSignalsResponse,
     SignalHistoryItem,
     TradeSignalResponse,
@@ -192,22 +194,39 @@ def run_backtest(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
-    backtester.repository.save_backtest_result(
-        symbol=symbol,
-        timeframe=timeframe,
-        strategy=strategy,
-        start=start,
-        end=end,
-        metrics={
-            "win_rate": result.win_rate,
-            "total_return_pct": result.total_return_pct,
-            "max_drawdown_pct": result.max_drawdown_pct,
-            "profit_factor": result.profit_factor,
-            "trades_count": result.trades_count,
-        },
-    )
+    repository.log_backtest(result)
 
     return BacktestResponse(**result.__dict__)
+
+
+@app.get("/backtests/recent", response_model=RecentBacktestsResponse)
+def get_recent_backtests(limit: int = 20) -> RecentBacktestsResponse:
+    """
+    Return the most recent backtest runs, newest first.
+    """
+
+    capped_limit = min(max(limit, 1), 100)
+    rows = repository.get_recent_backtests(limit=capped_limit)
+
+    items = [
+        BacktestHistoryItem(
+            id=row["id"],
+            created_at=row["created_at"],
+            symbol=row["symbol"],
+            timeframe=row["timeframe"],
+            strategy_name=row["strategy_name"],
+            start=row["start"],
+            end=row["end"],
+            win_rate=row["win_rate"],
+            total_return_pct=row["total_return_pct"],
+            max_drawdown_pct=row["max_drawdown_pct"],
+            profit_factor=row["profit_factor"],
+            trades_count=row["trades_count"],
+        )
+        for row in rows
+    ]
+
+    return RecentBacktestsResponse(items=items)
 
 
 @app.get("/signals/recent", response_model=RecentSignalsResponse)
