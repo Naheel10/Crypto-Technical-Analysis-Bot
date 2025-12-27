@@ -79,42 +79,47 @@ export const StrategiesTab: React.FC<Props> = ({
         </div>
       )}
 
-      <div className="space-y-2">
+      <div className="space-y-3">
         {strategies.map((s) => {
           const enabled = enabledStrategies.includes(s.name);
           return (
             <div
               key={s.name}
-              className="flex items-start justify-between rounded-lg border border-slate-800 bg-slate-900/60 p-3"
+              className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 shadow-sm"
             >
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-slate-100">{s.name}</span>
-                  <span className="rounded-full bg-slate-800 px-2 py-0.5 text-xs capitalize text-slate-200">
-                    {s.risk_profile}
-                  </span>
-                </div>
-                <p className="mt-1 text-sm text-slate-300">{s.description}</p>
-                <div className="mt-1 flex flex-wrap gap-1">
-                  {s.regimes.map((regime) => (
-                    <span
-                      key={regime}
-                      className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-300"
-                    >
-                      {regime}
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-base font-semibold text-slate-100">{s.name}</span>
+                    <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-200">
+                      {s.risk_profile}
                     </span>
-                  ))}
+                  </div>
+                  <p className="text-sm text-slate-300 leading-relaxed">{s.description}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {s.regimes.map((regime) => (
+                      <span
+                        key={regime}
+                        className="rounded-full border border-slate-700 bg-slate-800 px-2.5 py-1 text-[10px] uppercase tracking-wide text-slate-200"
+                      >
+                        {regime}
+                      </span>
+                    ))}
+                  </div>
                 </div>
+
+                <label className="flex items-center justify-end gap-2 text-xs font-semibold text-slate-200 md:pt-1">
+                  <input
+                    type="checkbox"
+                    checked={enabled}
+                    onChange={() => toggleStrategy(s.name)}
+                    className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
+                  />
+                  <span className="whitespace-nowrap">
+                    {enabled ? "Enabled" : "Disabled"}
+                  </span>
+                </label>
               </div>
-              <label className="flex items-center gap-2 text-xs text-slate-200">
-                <input
-                  type="checkbox"
-                  checked={enabled}
-                  onChange={() => toggleStrategy(s.name)}
-                  className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
-                />
-                <span>{enabled ? "Enabled" : "Disabled"}</span>
-              </label>
             </div>
           );
         })}
