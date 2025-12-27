@@ -24,6 +24,29 @@ class TradeSignalResponse(BaseModel):
     simple_explanation: Optional[str] = None
 
 
+class SignalScanRequest(BaseModel):
+    symbols: list[str]
+    timeframe: str
+    demo: bool = False
+    limit: int = 200
+
+
+class SignalSummary(BaseModel):
+    symbol: str
+    timeframe: str
+    action: TradeAction
+    strategy_name: str
+    risk_rating: RiskRating
+    confidence_score: float
+    regime: MarketRegime
+    created_at: datetime
+    simple_explanation: Optional[str] = None
+
+
+class SignalScanResponse(BaseModel):
+    items: list[SignalSummary]
+
+
 class BacktestResponse(BaseModel):
     symbol: str
     timeframe: str
@@ -109,4 +132,7 @@ __all__ = [
     "RecentSignalsResponse",
     "PositionSizingRequest",
     "PositionSizingResponse",
+    "SignalScanRequest",
+    "SignalSummary",
+    "SignalScanResponse",
 ]

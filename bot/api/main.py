@@ -18,6 +18,9 @@ from bot.api.schemas import (
     RecentBacktestsResponse,
     RecentSignalsResponse,
     SignalHistoryItem,
+    SignalScanRequest,
+    SignalScanResponse,
+    SignalSummary,
     TradeSignalResponse,
 )
 from bot.backtest.engine import Backtester, BacktestResult
@@ -116,8 +119,65 @@ def get_signal(
         **signal.to_dict(),
     )
 
+@app.post("/signals/scan", response_model=SignalScanResponse)
+def scan_signals(payload: SignalScanRequest) -> SignalScanResponse:
+    if not payload.symbols:
+        raise HTTPException(status_code=400, detail="Symbols list cannot be empty")
 
+    max_symbols = 20
+    if len(payload.symbols) > max_symbols:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Too many symbols requested. Max {max_symbols} allowed.",
+        )
 
+    summaries: list[SignalSummary] = []
+
+    for symbol in payload.symbols:
+        try:
+            signal: Optional[TradeSignal] = signal_engine.generate_signal(
+                symbol=symbol,
+                timeframe=payload.timeframe,
+                limit=payload.limit,
+                use_mock=payload.demo,
+            )
+        except Exception as exc:
+            print("ERROR while generating signal:", repr(exc))
+            raise HTTPException(
+                status_code=500,
+                detail=f"Signal generation failed for {symbol}: {exc}",
+            )
+
+        if signal is None:
+            signal = TradeSignal(
+                symbol=symbol,
+                timeframe=payload.timeframe,
+                action=TradeAction.NO_TRADE,
+                strategy_name="NoValidSetup",
+                entry_zone=None,
+                stop_loss=None,
+                take_profits=None,
+                risk_rating=RiskRating.LOW,
+                confidence_score=0.0,
+                regime=MarketRegime.UNKNOWN,
+                context={},
+            )
+
+        summaries.append(
+            SignalSummary(
+                symbol=symbol,
+                timeframe=payload.timeframe,
+                action=signal.action,
+                strategy_name=signal.strategy_name,
+                risk_rating=signal.risk_rating,
+                confidence_score=signal.confidence_score,
+                regime=signal.regime,
+                created_at=datetime.utcnow(),
+                simple_explanation=None,
+            )
+        )
+
+    return SignalScanResponse(items=summaries)
 
 
 @app.get("/candles", response_model=CandlesResponse)

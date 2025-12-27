@@ -6,6 +6,8 @@ import { LoadingSpinner } from "./LoadingSpinner";
 interface Props {
   onSignalLoaded: (signal: TradeSignalResponse | null) => void;
   onSelectionChange?: (selection: { symbol: string; timeframe: string }) => void;
+  selectedSymbol?: string;
+  selectedTimeframe?: string;
 }
 
 const DEFAULT_SYMBOLS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "XRP/USDT"];
@@ -14,9 +16,11 @@ const DEFAULT_TIMEFRAMES = ["15m", "1h", "4h", "1d"];
 export const SignalForm: React.FC<Props> = ({
   onSignalLoaded,
   onSelectionChange,
+  selectedSymbol,
+  selectedTimeframe,
 }) => {
-  const [symbol, setSymbol] = useState("BTC/USDT");
-  const [timeframe, setTimeframe] = useState("1h");
+  const [symbol, setSymbol] = useState(selectedSymbol ?? "BTC/USDT");
+  const [timeframe, setTimeframe] = useState(selectedTimeframe ?? "1h");
   const [demo, setDemo] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,6 +28,20 @@ export const SignalForm: React.FC<Props> = ({
   useEffect(() => {
     onSelectionChange?.({ symbol, timeframe });
   }, []);
+
+  useEffect(() => {
+    if (selectedSymbol && selectedSymbol !== symbol) {
+      setSymbol(selectedSymbol);
+      onSelectionChange?.({ symbol: selectedSymbol, timeframe });
+    }
+  }, [selectedSymbol]);
+
+  useEffect(() => {
+    if (selectedTimeframe && selectedTimeframe !== timeframe) {
+      setTimeframe(selectedTimeframe);
+      onSelectionChange?.({ symbol, timeframe: selectedTimeframe });
+    }
+  }, [selectedTimeframe]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
