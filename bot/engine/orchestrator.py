@@ -50,6 +50,7 @@ class SignalEngine:
         timeframe: str,
         limit: int = 200,
         use_mock: bool = False,
+        enabled_strategies: List[str] | None = None,
     ) -> Optional[TradeSignal]:
         """
         Full pipeline to produce a TradeSignal.
@@ -92,6 +93,11 @@ class SignalEngine:
         # 3) Strategies for this regime
         registry = get_strategy_registry()
         strategies = registry.get(regime, [])
+        if enabled_strategies:
+            enabled_set = set(enabled_strategies)
+            strategies = [
+                s for s in strategies if getattr(s, "name", "") in enabled_set
+            ]
         print(
             "[SignalEngine] Strategies for regime",
             regime,

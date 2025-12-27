@@ -9,6 +9,7 @@ import { LoadingSpinner } from "./LoadingSpinner";
 
 interface Props {
   onSelectSymbol?: (symbol: string, timeframe: string) => void;
+  enabledStrategies?: string[];
 }
 
 const TIMEFRAME_OPTIONS = ["15m", "1h", "4h", "1d"];
@@ -19,7 +20,10 @@ const actionBadgeClass: Record<TradeAction, string> = {
   NO_TRADE: "bg-slate-700 text-slate-200 border border-slate-600",
 };
 
-export const WatchlistPanel: React.FC<Props> = ({ onSelectSymbol }) => {
+export const WatchlistPanel: React.FC<Props> = ({
+  onSelectSymbol,
+  enabledStrategies,
+}) => {
   const { watchlist, addSymbol, removeSymbol } = useWatchlist();
   const [symbolInput, setSymbolInput] = useState("");
   const [timeframe, setTimeframe] = useState("1h");
@@ -47,11 +51,14 @@ export const WatchlistPanel: React.FC<Props> = ({ onSelectSymbol }) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await scanSignals({
-        symbols: watchlist,
-        timeframe,
-        demo: false,
-      });
+      const data = await scanSignals(
+        {
+          symbols: watchlist,
+          timeframe,
+          demo: false,
+        },
+        enabledStrategies,
+      );
       setResults(data);
     } catch (err) {
       console.error(err);

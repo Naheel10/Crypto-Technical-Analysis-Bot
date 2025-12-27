@@ -1,12 +1,26 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Literal
 
 from pydantic import BaseModel
 
 from bot.models import MarketRegime, RiskRating, TradeAction
 from bot.engine.risk import PositionSizingRequest, PositionSizingResponse
+
+
+RiskProfile = Literal["conservative", "moderate", "aggressive"]
+
+
+class StrategyInfo(BaseModel):
+    name: str
+    description: str
+    regimes: list[MarketRegime]
+    risk_profile: RiskProfile
+
+
+class StrategyListResponse(BaseModel):
+    items: list[StrategyInfo]
 
 
 class TradeSignalResponse(BaseModel):
@@ -29,6 +43,7 @@ class SignalScanRequest(BaseModel):
     timeframe: str
     demo: bool = False
     limit: int = 200
+    enabled_strategies: list[str] | None = None
 
 
 class SignalSummary(BaseModel):
@@ -122,6 +137,9 @@ class RecentSignalsResponse(BaseModel):
 
 
 __all__ = [
+    "RiskProfile",
+    "StrategyInfo",
+    "StrategyListResponse",
     "TradeSignalResponse",
     "BacktestResponse",
     "BacktestHistoryItem",

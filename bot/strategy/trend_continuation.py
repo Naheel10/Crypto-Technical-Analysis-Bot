@@ -13,9 +13,15 @@ from bot.models import (
 
 
 class TrendContinuationStrategy:
-    """Bias long in clear uptrends with reasonably soft pullback rules."""
+    """Bias long in clear uptrends with pullback entries."""
 
     name = "TrendContinuation"
+    description = (
+        "Trend-following setup that looks for pullbacks in an uptrend with EMAs "
+        "and RSI confirmation."
+    )
+    regimes = [MarketRegime.TREND_UP]
+    risk_profile = "moderate"
 
     def generate_signal(
         self,

@@ -22,6 +22,8 @@ from bot.api.schemas import (
     SignalScanResponse,
     SignalSummary,
     TradeSignalResponse,
+    StrategyInfo,
+    StrategyListResponse,
 )
 from bot.backtest.engine import Backtester, BacktestResult
 from bot.data.repository import DataRepository
@@ -34,6 +36,7 @@ from bot.models import (
     RiskRating,
     MarketRegime,
 )
+from bot.strategy.registry import list_all_strategies
 from bot.strategy.trend_continuation import TrendContinuationStrategy
 from bot.strategy.range_reversion import RangeReversionStrategy
 from bot.strategy.base import BaseStrategy
@@ -80,12 +83,21 @@ def get_signal(
         False,
         description="Use mock uptrend data for a guaranteed BUY demo",
     ),
+    enabled_strategies: Optional[str] = Query(
+        None,
+        description="Comma-separated list of strategy names to enable (e.g. 'TrendContinuation,RangeReversion'). If omitted, all strategies are considered.",
+    ),
 ) -> TradeSignalResponse:
+    enabled_list: list[str] | None = None
+    if enabled_strategies:
+        enabled_list = [s.strip() for s in enabled_strategies.split(",") if s.strip()]
+
     try:
         signal: Optional[TradeSignal] = signal_engine.generate_signal(
             symbol=symbol,
             timeframe=timeframe,
             use_mock=demo,
+            enabled_strategies=enabled_list,
         )
     except Exception as exc:  # debug guard
         print("ERROR while generating signal:", repr(exc))
@@ -140,6 +152,7 @@ def scan_signals(payload: SignalScanRequest) -> SignalScanResponse:
                 timeframe=payload.timeframe,
                 limit=payload.limit,
                 use_mock=payload.demo,
+                enabled_strategies=payload.enabled_strategies,
             )
         except Exception as exc:
             print("ERROR while generating signal:", repr(exc))
@@ -178,6 +191,26 @@ def scan_signals(payload: SignalScanRequest) -> SignalScanResponse:
         )
 
     return SignalScanResponse(items=summaries)
+
+
+@app.get("/strategies", response_model=StrategyListResponse)
+def list_strategies() -> StrategyListResponse:
+    """Return metadata about all available strategies."""
+    items: list[StrategyInfo] = []
+    for strat_cls in list_all_strategies():
+        name = getattr(strat_cls, "name", strat_cls.__name__)
+        description = getattr(strat_cls, "description", "")
+        regimes = getattr(strat_cls, "regimes", [])
+        risk_profile = getattr(strat_cls, "risk_profile", "moderate")
+        items.append(
+            StrategyInfo(
+                name=name,
+                description=description,
+                regimes=regimes,
+                risk_profile=risk_profile,  # type: ignore[arg-type]
+            )
+        )
+    return StrategyListResponse(items=items)
 
 
 @app.get("/candles", response_model=CandlesResponse)
