@@ -25,3 +25,17 @@ _REGISTRY: Dict[MarketRegime, List[BaseStrategy]] = {
 def get_strategy_registry() -> Dict[MarketRegime, List[BaseStrategy]]:
     """Return mapping from market regime to list of strategies to run."""
     return _REGISTRY
+
+
+def list_all_strategies() -> List[type[BaseStrategy]]:
+    """Return a list of all unique strategy classes registered across regimes."""
+    registry = get_strategy_registry()
+    seen = set()
+    strategies: List[type[BaseStrategy]] = []
+    for strategies_for_regime in registry.values():
+        for strat in strategies_for_regime:
+            cls = strat.__class__
+            if cls not in seen:
+                seen.add(cls)
+                strategies.append(cls)
+    return strategies

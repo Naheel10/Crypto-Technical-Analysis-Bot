@@ -8,9 +8,15 @@ from bot.models import MarketRegime, RiskRating, TradeAction, TradeSignal
 
 
 class RangeReversionStrategy:
-    """Fade extremes in clear ranges with RSI oversold or overbought."""
+    """Fade extremes inside a sideways range."""
 
     name = "RangeReversion"
+    description = (
+        "Range-trading setup that looks for mean reversion near support and "
+        "resistance levels."
+    )
+    regimes = [MarketRegime.RANGE]
+    risk_profile = "conservative"
 
     def generate_signal(
         self,

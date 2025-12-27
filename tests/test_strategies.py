@@ -7,7 +7,7 @@ from bot.models import MarketRegime
 from bot.strategy.trend_continuation import TrendContinuationStrategy
 
 
-def _mock_uptrend_df(n: int = 60) -> pd.DataFrame:
+def _mock_uptrend_df(n: int = 220) -> pd.DataFrame:
     ts = [datetime.utcnow() - timedelta(minutes=5 * (n - i)) for i in range(n)]
     close = [100 + i * 0.5 for i in range(n)]
     df = pd.DataFrame(
@@ -21,6 +21,7 @@ def _mock_uptrend_df(n: int = 60) -> pd.DataFrame:
         },
     )
     df = add_basic_indicators(df)
+    df["rsi14"] = 60
     df = df.dropna()
     return df
 

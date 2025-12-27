@@ -8,6 +8,7 @@ interface Props {
   onSelectionChange?: (selection: { symbol: string; timeframe: string }) => void;
   selectedSymbol?: string;
   selectedTimeframe?: string;
+  enabledStrategies?: string[];
 }
 
 const DEFAULT_SYMBOLS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "XRP/USDT"];
@@ -18,6 +19,7 @@ export const SignalForm: React.FC<Props> = ({
   onSelectionChange,
   selectedSymbol,
   selectedTimeframe,
+  enabledStrategies,
 }) => {
   const [symbol, setSymbol] = useState(selectedSymbol ?? "BTC/USDT");
   const [timeframe, setTimeframe] = useState(selectedTimeframe ?? "1h");
@@ -50,7 +52,12 @@ export const SignalForm: React.FC<Props> = ({
     onSignalLoaded(null);
 
     try {
-      const data = await fetchSignal({ symbol, timeframe, demo });
+      const data = await fetchSignal({
+        symbol,
+        timeframe,
+        demo,
+        enabledStrategies,
+      });
       onSignalLoaded(data);
     } catch (err) {
       console.error(err);

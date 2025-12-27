@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Layout } from "./components/Layout";
 import { SignalForm } from "./components/SignalForm";
 import { SignalCard } from "./components/SignalCard";
@@ -10,17 +10,48 @@ import { RecentSignalsPanel } from "./components/RecentSignalsPanel";
 import { RiskPanel } from "./components/RiskPanel";
 import { BacktestHistoryPanel } from "./components/BacktestHistoryPanel";
 import { WatchlistPanel } from "./components/WatchlistPanel";
-import type { BacktestResponse, TradeSignalResponse } from "./lib/api";
+import { StrategiesTab } from "./components/StrategiesTab";
+import {
+  fetchStrategies,
+  type BacktestResponse,
+  type StrategyInfo,
+  type TradeSignalResponse,
+} from "./lib/api";
+import { useStrategyPreferences } from "./hooks/useStrategyPreferences";
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<"live" | "backtest" | "watchlist">(
-    "live",
-  );
+  const [activeTab, setActiveTab] = useState<
+    "live" | "backtest" | "watchlist" | "strategies"
+  >("live");
   const [signal, setSignal] = useState<TradeSignalResponse | null>(null);
   const [backtestResult, setBacktestResult] =
     useState<BacktestResponse | null>(null);
   const [selectedSymbol, setSelectedSymbol] = useState("BTC/USDT");
   const [selectedTimeframe, setSelectedTimeframe] = useState("1h");
+  const [strategies, setStrategies] = useState<StrategyInfo[]>([]);
+  const [strategiesLoading, setStrategiesLoading] = useState(true);
+  const [strategiesError, setStrategiesError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadStrategies = async () => {
+      setStrategiesLoading(true);
+      try {
+        const items = await fetchStrategies();
+        setStrategies(items);
+        setStrategiesError(null);
+      } catch (err) {
+        setStrategiesError((err as Error).message ?? "Failed to load strategies");
+      } finally {
+        setStrategiesLoading(false);
+      }
+    };
+
+    loadStrategies();
+  }, []);
+
+  const strategyNames = strategies.map((s) => s.name);
+  const { enabledStrategies, toggleStrategy, enableAll, disableAll } =
+    useStrategyPreferences(strategyNames);
 
   return (
     <Layout>
@@ -55,6 +86,16 @@ const App: React.FC = () => {
         >
           Watchlist
         </button>
+        <button
+          onClick={() => setActiveTab("strategies")}
+          className={`flex-1 rounded-lg px-3 py-2 font-semibold transition ${
+            activeTab === "strategies"
+              ? "bg-emerald-500 text-slate-950"
+              : "text-slate-200 hover:bg-slate-800"
+          }`}
+        >
+          Strategies
+        </button>
       </div>
 
       {activeTab === "live" ? (
@@ -64,6 +105,7 @@ const App: React.FC = () => {
               onSignalLoaded={setSignal}
               selectedSymbol={selectedSymbol}
               selectedTimeframe={selectedTimeframe}
+              enabledStrategies={enabledStrategies}
               onSelectionChange={({ symbol, timeframe }) => {
                 setSelectedSymbol(symbol);
                 setSelectedTimeframe(timeframe);
@@ -117,8 +159,9 @@ const App: React.FC = () => {
 
           <BacktestHistoryPanel limit={15} />
         </div>
-      ) : (
+      ) : activeTab === "watchlist" ? (
         <WatchlistPanel
+          enabledStrategies={enabledStrategies}
           onSelectSymbol={(sym, tf) => {
             setSelectedSymbol(sym);
             setSelectedTimeframe(tf);
@@ -126,6 +169,32 @@ const App: React.FC = () => {
             setActiveTab("live");
           }}
         />
+      ) : (
+        <div className="space-y-4">
+          <StrategiesTab
+            strategies={strategies}
+            loading={strategiesLoading}
+            error={strategiesError}
+            onRetry={async () => {
+              setStrategiesError(null);
+              setStrategiesLoading(true);
+              try {
+                const items = await fetchStrategies();
+                setStrategies(items);
+              } catch (err) {
+                setStrategiesError(
+                  (err as Error).message ?? "Failed to load strategies",
+                );
+              } finally {
+                setStrategiesLoading(false);
+              }
+            }}
+            enabledStrategies={enabledStrategies}
+            toggleStrategy={toggleStrategy}
+            enableAll={enableAll}
+            disableAll={disableAll}
+          />
+        </div>
       )}
     </Layout>
   );

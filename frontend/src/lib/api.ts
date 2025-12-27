@@ -1,6 +1,7 @@
 // frontend/src/lib/api.ts
 export type TradeAction = "BUY" | "SELL" | "NO_TRADE";
 export type RiskRating = "LOW" | "MEDIUM" | "HIGH";
+export type RiskProfile = "conservative" | "moderate" | "aggressive";
 export type MarketRegime =
   | "TREND_UP"
   | "TREND_DOWN"
@@ -8,6 +9,17 @@ export type MarketRegime =
   | "CHOPPY"
   | "BREAKOUT"
   | "UNKNOWN";
+
+export interface StrategyInfo {
+  name: string;
+  description: string;
+  regimes: MarketRegime[];
+  risk_profile: RiskProfile;
+}
+
+export interface StrategyListResponse {
+  items: StrategyInfo[];
+}
 
 export interface TradeSignalResponse {
   symbol: string;
@@ -103,6 +115,7 @@ export interface SignalScanRequest {
   timeframe: string;
   demo?: boolean;
   limit?: number;
+  enabled_strategies?: string[];
 }
 
 export interface SignalSummary {
@@ -144,11 +157,18 @@ export async function fetchSignal(params: {
   symbol: string;
   timeframe: string;
   demo?: boolean;
+  enabledStrategies?: string[];
 }): Promise<TradeSignalResponse> {
   const url = new URL(`${API_BASE}/signal`);
   url.searchParams.set("symbol", params.symbol);
   url.searchParams.set("timeframe", params.timeframe);
   if (params.demo) url.searchParams.set("demo", "true");
+  if (params.enabledStrategies && params.enabledStrategies.length > 0) {
+    url.searchParams.set(
+      "enabled_strategies",
+      params.enabledStrategies.join(","),
+    );
+  }
 
   const res = await fetch(url.toString());
   if (!res.ok) {
@@ -214,11 +234,16 @@ export async function fetchRecentSignals(
 
 export async function scanSignals(
   payload: SignalScanRequest,
+  enabledStrategies?: string[],
 ): Promise<SignalSummary[]> {
+  const body = { ...payload };
+  if (enabledStrategies && enabledStrategies.length > 0) {
+    body.enabled_strategies = enabledStrategies;
+  }
   const res = await fetch(`${API_BASE}/signals/scan`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {
@@ -227,6 +252,15 @@ export async function scanSignals(
   }
 
   const data: SignalScanResponse = await res.json();
+  return data.items;
+}
+
+export async function fetchStrategies(): Promise<StrategyInfo[]> {
+  const res = await fetch(`${API_BASE}/strategies`);
+  if (!res.ok) {
+    throw new Error("Failed to fetch strategies");
+  }
+  const data: StrategyListResponse = await res.json();
   return data.items;
 }
 
