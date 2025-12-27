@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import sqlite3
 from datetime import datetime
 from typing import Optional
@@ -46,13 +45,17 @@ class DataRepository:
                 """
                 CREATE TABLE IF NOT EXISTS backtests (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    created_at INTEGER NOT NULL,
                     symbol TEXT NOT NULL,
                     timeframe TEXT NOT NULL,
-                    strategy TEXT NOT NULL,
+                    strategy_name TEXT NOT NULL,
                     start INTEGER NOT NULL,
                     end INTEGER NOT NULL,
-                    metrics_json TEXT,
-                    created_at INTEGER NOT NULL
+                    win_rate REAL NOT NULL,
+                    total_return_pct REAL NOT NULL,
+                    max_drawdown_pct REAL NOT NULL,
+                    profit_factor REAL NOT NULL,
+                    trades_count INTEGER NOT NULL
                 )
                 """,
             )
@@ -84,11 +87,17 @@ class DataRepository:
     def _migrate_backtests_table(self, cur: sqlite3.Cursor) -> None:
         """Add any missing columns for the backtests table without dropping data."""
         required_columns = {
-            "strategy": "TEXT NOT NULL DEFAULT ''",
+            "created_at": "INTEGER NOT NULL DEFAULT 0",
+            "symbol": "TEXT NOT NULL DEFAULT ''",
+            "timeframe": "TEXT NOT NULL DEFAULT ''",
+            "strategy_name": "TEXT NOT NULL DEFAULT ''",
             "start": "INTEGER NOT NULL DEFAULT 0",
             "end": "INTEGER NOT NULL DEFAULT 0",
-            "metrics_json": "TEXT",
-            "created_at": "INTEGER NOT NULL DEFAULT 0",
+            "win_rate": "REAL NOT NULL DEFAULT 0",
+            "total_return_pct": "REAL NOT NULL DEFAULT 0",
+            "max_drawdown_pct": "REAL NOT NULL DEFAULT 0",
+            "profit_factor": "REAL NOT NULL DEFAULT 0",
+            "trades_count": "INTEGER NOT NULL DEFAULT 0",
         }
         existing_columns = {
             row[1] for row in cur.execute("PRAGMA table_info(backtests)").fetchall()
@@ -167,33 +176,71 @@ class DataRepository:
         finally:
             conn.close()
 
-    def save_backtest_result(
-        self,
-        symbol: str,
-        timeframe: str,
-        strategy: str,
-        start: datetime,
-        end: datetime,
-        metrics: dict,
-    ) -> None:
+    def log_backtest(self, result) -> None:
+        """Persist a backtest result for history browsing."""
+
         conn = self._connect()
         try:
             conn.execute(
                 """
-                INSERT INTO backtests (symbol, timeframe, strategy, start, end, metrics_json, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO backtests (
+                    created_at, symbol, timeframe, strategy_name, start, end,
+                    win_rate, total_return_pct, max_drawdown_pct, profit_factor, trades_count
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    symbol,
-                    timeframe,
-                    strategy,
-                    int(start.timestamp()),
-                    int(end.timestamp()),
-                    json.dumps(metrics),
                     int(datetime.utcnow().timestamp()),
+                    result.symbol,
+                    result.timeframe,
+                    result.strategy_name,
+                    int(result.start.timestamp()),
+                    int(result.end.timestamp()),
+                    float(result.win_rate),
+                    float(result.total_return_pct),
+                    float(result.max_drawdown_pct),
+                    float(result.profit_factor),
+                    int(result.trades_count),
                 ),
             )
             conn.commit()
+        finally:
+            conn.close()
+
+    def get_recent_backtests(self, limit: int = 20) -> list[dict]:
+        """Return the most recent backtests ordered newest first."""
+
+        conn = self._connect()
+        try:
+            cursor = conn.execute(
+                """
+                SELECT
+                    id, created_at, symbol, timeframe, strategy_name, start, end,
+                    win_rate, total_return_pct, max_drawdown_pct, profit_factor, trades_count
+                FROM backtests
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            )
+            rows = cursor.fetchall()
+            return [
+                {
+                    "id": row[0],
+                    "created_at": datetime.utcfromtimestamp(row[1]),
+                    "symbol": row[2],
+                    "timeframe": row[3],
+                    "strategy_name": row[4],
+                    "start": datetime.utcfromtimestamp(row[5]),
+                    "end": datetime.utcfromtimestamp(row[6]),
+                    "win_rate": float(row[7]),
+                    "total_return_pct": float(row[8]),
+                    "max_drawdown_pct": float(row[9]),
+                    "profit_factor": float(row[10]),
+                    "trades_count": int(row[11]),
+                }
+                for row in rows
+            ]
         finally:
             conn.close()
 
