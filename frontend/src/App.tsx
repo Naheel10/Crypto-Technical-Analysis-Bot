@@ -5,6 +5,7 @@ import { SignalCard } from "./components/SignalCard";
 import { MetricsPanel } from "./components/MetricsPanel";
 import { BacktestForm } from "./components/BacktestForm";
 import { BacktestResultCard } from "./components/BacktestResultCard";
+import { ChartPanel } from "./components/ChartPanel";
 import type { BacktestResponse, TradeSignalResponse } from "./lib/api";
 
 const App: React.FC = () => {
@@ -12,6 +13,8 @@ const App: React.FC = () => {
   const [signal, setSignal] = useState<TradeSignalResponse | null>(null);
   const [backtestResult, setBacktestResult] =
     useState<BacktestResponse | null>(null);
+  const [selectedSymbol, setSelectedSymbol] = useState("BTC/USDT");
+  const [selectedTimeframe, setSelectedTimeframe] = useState("1h");
 
   return (
     <Layout>
@@ -41,8 +44,19 @@ const App: React.FC = () => {
       {activeTab === "live" ? (
         <div className="grid gap-6 lg:grid-cols-[2fr,1.2fr]">
           <div className="space-y-4">
-            <SignalForm onSignalLoaded={setSignal} />
+            <SignalForm
+              onSignalLoaded={setSignal}
+              onSelectionChange={({ symbol, timeframe }) => {
+                setSelectedSymbol(symbol);
+                setSelectedTimeframe(timeframe);
+              }}
+            />
             {signal && <SignalCard signal={signal} />}
+            <ChartPanel
+              symbol={selectedSymbol}
+              timeframe={selectedTimeframe}
+              signal={signal}
+            />
           </div>
 
           <div className="space-y-4">

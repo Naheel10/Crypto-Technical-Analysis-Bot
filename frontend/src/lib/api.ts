@@ -37,6 +37,32 @@ export interface BacktestResponse {
   trades_count: number;
 }
 
+export interface CandleWithIndicators {
+  timestamp: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  ema20?: number | null;
+  ema50?: number | null;
+  ema200?: number | null;
+  rsi14?: number | null;
+  macd?: number | null;
+  macd_signal?: number | null;
+  macd_hist?: number | null;
+  bb_high?: number | null;
+  bb_low?: number | null;
+  bb_mid?: number | null;
+  bb_width?: number | null;
+}
+
+export interface CandlesResponse {
+  symbol: string;
+  timeframe: string;
+  candles: CandleWithIndicators[];
+}
+
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
@@ -76,6 +102,24 @@ export async function fetchBacktest(params: {
   if (!res.ok) {
     const text = await res.text();
     throw new Error(text || "Failed to fetch backtest");
+  }
+  return res.json();
+}
+
+export async function fetchCandles(params: {
+  symbol: string;
+  timeframe: string;
+  limit?: number;
+}): Promise<CandlesResponse> {
+  const url = new URL(`${API_BASE}/candles`);
+  url.searchParams.set("symbol", params.symbol);
+  url.searchParams.set("timeframe", params.timeframe);
+  if (params.limit) url.searchParams.set("limit", params.limit.toString());
+
+  const res = await fetch(url.toString());
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || "Failed to fetch candles");
   }
   return res.json();
 }

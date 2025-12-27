@@ -3,13 +3,16 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional, Type
 
+import pandas as pd
+
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from bot.ai.explanation import generate_explanation
-from bot.api.schemas import BacktestResponse, TradeSignalResponse
+from bot.api.schemas import CandlesResponse, BacktestResponse, TradeSignalResponse
 from bot.backtest.engine import Backtester, BacktestResult
 from bot.engine.orchestrator import SignalEngine
+from bot.indicators.core import add_basic_indicators
 from bot.models import (
     TradeSignal,
     TradeAction,
@@ -100,6 +103,58 @@ def get_signal(
 
 
 
+
+
+@app.get("/candles", response_model=CandlesResponse)
+def get_candles(
+    symbol: str = Query(..., example="BTC/USDT"),
+    timeframe: str = Query(..., example="1h"),
+    limit: int = Query(200, ge=20, le=1000),
+) -> CandlesResponse:
+    try:
+        df = signal_engine.exchange_client.get_recent_candles(
+            symbol=symbol,
+            timeframe=timeframe,
+            limit=limit,
+        )
+    except Exception as exc:
+        print("ERROR while fetching candles:", repr(exc))
+        raise HTTPException(status_code=500, detail="Failed to load candles")
+
+    if df is None or df.empty:
+        raise HTTPException(status_code=404, detail="No candles returned for that market")
+
+    df = add_basic_indicators(df)
+
+    candles = []
+    for _, row in df.iterrows():
+        candles.append(
+            {
+                "timestamp": row["timestamp"].to_pydatetime(),
+                "open": float(row["open"]),
+                "high": float(row["high"]),
+                "low": float(row["low"]),
+                "close": float(row["close"]),
+                "volume": float(row["volume"]),
+                "ema20": None if pd.isna(row.get("ema20")) else float(row.get("ema20")),
+                "ema50": None if pd.isna(row.get("ema50")) else float(row.get("ema50")),
+                "ema200": None if pd.isna(row.get("ema200")) else float(row.get("ema200")),
+                "rsi14": None if pd.isna(row.get("rsi14")) else float(row.get("rsi14")),
+                "macd": None if pd.isna(row.get("macd")) else float(row.get("macd")),
+                "macd_signal": None if pd.isna(row.get("macd_signal")) else float(row.get("macd_signal")),
+                "macd_hist": None if pd.isna(row.get("macd_hist")) else float(row.get("macd_hist")),
+                "bb_high": None if pd.isna(row.get("bb_high")) else float(row.get("bb_high")),
+                "bb_low": None if pd.isna(row.get("bb_low")) else float(row.get("bb_low")),
+                "bb_mid": None if pd.isna(row.get("bb_mid")) else float(row.get("bb_mid")),
+                "bb_width": None if pd.isna(row.get("bb_width")) else float(row.get("bb_width")),
+            }
+        )
+
+    return CandlesResponse(
+        symbol=symbol,
+        timeframe=timeframe,
+        candles=candles,
+    )
 
 @app.get("/backtest", response_model=BacktestResponse)
 def run_backtest(
