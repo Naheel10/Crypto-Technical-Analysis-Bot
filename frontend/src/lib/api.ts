@@ -98,6 +98,29 @@ export interface RecentSignalsResponse {
   items: SignalHistoryItem[];
 }
 
+export interface SignalScanRequest {
+  symbols: string[];
+  timeframe: string;
+  demo?: boolean;
+  limit?: number;
+}
+
+export interface SignalSummary {
+  symbol: string;
+  timeframe: string;
+  action: TradeAction;
+  strategy_name: string;
+  risk_rating: RiskRating;
+  confidence_score: number;
+  regime: MarketRegime;
+  created_at: string;
+  simple_explanation?: string | null;
+}
+
+export interface SignalScanResponse {
+  items: SignalSummary[];
+}
+
 export interface PositionSizingRequest {
   account_size: number;
   risk_pct: number;
@@ -186,6 +209,24 @@ export async function fetchRecentSignals(
     throw new Error("Failed to fetch recent signals");
   }
   const data: RecentSignalsResponse = await res.json();
+  return data.items;
+}
+
+export async function scanSignals(
+  payload: SignalScanRequest,
+): Promise<SignalSummary[]> {
+  const res = await fetch(`${API_BASE}/signals/scan`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || "Failed to scan signals");
+  }
+
+  const data: SignalScanResponse = await res.json();
   return data.items;
 }
 

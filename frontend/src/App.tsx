@@ -9,10 +9,13 @@ import { ChartPanel } from "./components/ChartPanel";
 import { RecentSignalsPanel } from "./components/RecentSignalsPanel";
 import { RiskPanel } from "./components/RiskPanel";
 import { BacktestHistoryPanel } from "./components/BacktestHistoryPanel";
+import { WatchlistPanel } from "./components/WatchlistPanel";
 import type { BacktestResponse, TradeSignalResponse } from "./lib/api";
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<"live" | "backtest">("live");
+  const [activeTab, setActiveTab] = useState<"live" | "backtest" | "watchlist">(
+    "live",
+  );
   const [signal, setSignal] = useState<TradeSignalResponse | null>(null);
   const [backtestResult, setBacktestResult] =
     useState<BacktestResponse | null>(null);
@@ -42,6 +45,16 @@ const App: React.FC = () => {
         >
           Backtest
         </button>
+        <button
+          onClick={() => setActiveTab("watchlist")}
+          className={`flex-1 rounded-lg px-3 py-2 font-semibold transition ${
+            activeTab === "watchlist"
+              ? "bg-emerald-500 text-slate-950"
+              : "text-slate-200 hover:bg-slate-800"
+          }`}
+        >
+          Watchlist
+        </button>
       </div>
 
       {activeTab === "live" ? (
@@ -49,6 +62,8 @@ const App: React.FC = () => {
           <div className="space-y-4">
             <SignalForm
               onSignalLoaded={setSignal}
+              selectedSymbol={selectedSymbol}
+              selectedTimeframe={selectedTimeframe}
               onSelectionChange={({ symbol, timeframe }) => {
                 setSelectedSymbol(symbol);
                 setSelectedTimeframe(timeframe);
@@ -89,7 +104,7 @@ const App: React.FC = () => {
             </div>
           </div>
         </div>
-      ) : (
+      ) : activeTab === "backtest" ? (
         <div className="space-y-4">
           <div className="grid gap-6 lg:grid-cols-[2fr,1.2fr]">
             <div className="space-y-4">
@@ -102,6 +117,15 @@ const App: React.FC = () => {
 
           <BacktestHistoryPanel limit={15} />
         </div>
+      ) : (
+        <WatchlistPanel
+          onSelectSymbol={(sym, tf) => {
+            setSelectedSymbol(sym);
+            setSelectedTimeframe(tf);
+            setSignal(null);
+            setActiveTab("live");
+          }}
+        />
       )}
     </Layout>
   );
