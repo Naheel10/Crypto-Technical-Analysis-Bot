@@ -6,6 +6,7 @@ from typing import Dict, List, Optional, Tuple
 from pydantic import BaseModel
 
 from bot.models import MarketRegime, RiskRating, TradeAction
+from bot.engine.risk import PositionSizingRequest, PositionSizingResponse
 
 
 class TradeSignalResponse(BaseModel):
@@ -60,3 +61,31 @@ class CandlesResponse(BaseModel):
     symbol: str
     timeframe: str
     candles: List[CandleWithIndicators]
+
+
+class SignalHistoryItem(BaseModel):
+    id: int
+    created_at: datetime
+    symbol: str
+    timeframe: str
+    action: TradeAction
+    strategy_name: str
+    risk_rating: RiskRating
+    confidence_score: float
+    regime: MarketRegime
+
+
+class RecentSignalsResponse(BaseModel):
+    items: list[SignalHistoryItem]
+
+
+__all__ = [
+    "TradeSignalResponse",
+    "BacktestResponse",
+    "CandleWithIndicators",
+    "CandlesResponse",
+    "SignalHistoryItem",
+    "RecentSignalsResponse",
+    "PositionSizingRequest",
+    "PositionSizingResponse",
+]

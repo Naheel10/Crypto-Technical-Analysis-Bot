@@ -57,6 +57,26 @@ class DataRepository:
                 """,
             )
             self._migrate_backtests_table(cur)
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS signals (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    created_at INTEGER NOT NULL,
+                    symbol TEXT NOT NULL,
+                    timeframe TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    strategy_name TEXT NOT NULL,
+                    risk_rating TEXT NOT NULL,
+                    confidence_score REAL NOT NULL,
+                    regime TEXT NOT NULL,
+                    entry_zone_low REAL,
+                    entry_zone_high REAL,
+                    stop_loss REAL,
+                    tp1 REAL,
+                    tp2 REAL
+                )
+                """,
+            )
             conn.commit()
         finally:
             conn.close()
@@ -174,5 +194,86 @@ class DataRepository:
                 ),
             )
             conn.commit()
+        finally:
+            conn.close()
+
+    def log_signal(self, signal) -> None:
+        """Persist a TradeSignal for history/auditing."""
+
+        entry_low = None
+        entry_high = None
+        if signal.entry_zone:
+            entry_low, entry_high = signal.entry_zone
+
+        tp1 = None
+        tp2 = None
+        if signal.take_profits:
+            if len(signal.take_profits) > 0:
+                tp1 = signal.take_profits[0]
+            if len(signal.take_profits) > 1:
+                tp2 = signal.take_profits[1]
+
+        conn = self._connect()
+        try:
+            conn.execute(
+                """
+                INSERT INTO signals (
+                    created_at, symbol, timeframe, action, strategy_name, risk_rating,
+                    confidence_score, regime, entry_zone_low, entry_zone_high,
+                    stop_loss, tp1, tp2
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    int(datetime.utcnow().timestamp()),
+                    signal.symbol,
+                    signal.timeframe,
+                    getattr(signal.action, "value", signal.action),
+                    signal.strategy_name,
+                    getattr(signal.risk_rating, "value", signal.risk_rating),
+                    float(signal.confidence_score),
+                    getattr(signal.regime, "value", signal.regime),
+                    entry_low,
+                    entry_high,
+                    signal.stop_loss,
+                    tp1,
+                    tp2,
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def get_recent_signals(self, limit: int = 20) -> list[dict]:
+        """Return the most recent logged signals ordered newest first."""
+
+        conn = self._connect()
+        try:
+            cursor = conn.execute(
+                """
+                SELECT
+                    id, created_at, symbol, timeframe, action, strategy_name,
+                    risk_rating, confidence_score, regime
+                FROM signals
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            )
+            rows = cursor.fetchall()
+            return [
+                {
+                    "id": row[0],
+                    "created_at": datetime.utcfromtimestamp(row[1]),
+                    "symbol": row[2],
+                    "timeframe": row[3],
+                    "action": row[4],
+                    "strategy_name": row[5],
+                    "risk_rating": row[6],
+                    "confidence_score": row[7],
+                    "regime": row[8],
+                }
+                for row in rows
+            ]
         finally:
             conn.close()

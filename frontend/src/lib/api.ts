@@ -63,6 +63,38 @@ export interface CandlesResponse {
   candles: CandleWithIndicators[];
 }
 
+export interface SignalHistoryItem {
+  id: number;
+  created_at: string;
+  symbol: string;
+  timeframe: string;
+  action: TradeAction;
+  strategy_name: string;
+  risk_rating: RiskRating;
+  confidence_score: number;
+  regime: MarketRegime;
+}
+
+export interface RecentSignalsResponse {
+  items: SignalHistoryItem[];
+}
+
+export interface PositionSizingRequest {
+  account_size: number;
+  risk_pct: number;
+  entry_price: number;
+  stop_loss: number;
+  take_profits?: number[];
+}
+
+export interface PositionSizingResponse {
+  account_size: number;
+  risk_pct: number;
+  risk_amount: number;
+  position_size: number;
+  r_to_tp: number[];
+}
+
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
@@ -121,5 +153,36 @@ export async function fetchCandles(params: {
     const text = await res.text();
     throw new Error(text || "Failed to fetch candles");
   }
+  return res.json();
+}
+
+export async function fetchRecentSignals(
+  limit: number = 20,
+): Promise<SignalHistoryItem[]> {
+  const url = new URL(`${API_BASE}/signals/recent`);
+  url.searchParams.set("limit", limit.toString());
+
+  const res = await fetch(url.toString());
+  if (!res.ok) {
+    throw new Error("Failed to fetch recent signals");
+  }
+  const data: RecentSignalsResponse = await res.json();
+  return data.items;
+}
+
+export async function calculatePositionSizing(
+  payload: PositionSizingRequest,
+): Promise<PositionSizingResponse> {
+  const res = await fetch(`${API_BASE}/risk/position`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || "Failed to calculate position sizing");
+  }
+
   return res.json();
 }
