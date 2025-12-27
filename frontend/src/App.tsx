@@ -6,6 +6,8 @@ import { MetricsPanel } from "./components/MetricsPanel";
 import { BacktestForm } from "./components/BacktestForm";
 import { BacktestResultCard } from "./components/BacktestResultCard";
 import { ChartPanel } from "./components/ChartPanel";
+import { RecentSignalsPanel } from "./components/RecentSignalsPanel";
+import { RiskPanel } from "./components/RiskPanel";
 import type { BacktestResponse, TradeSignalResponse } from "./lib/api";
 
 const App: React.FC = () => {
@@ -57,10 +59,12 @@ const App: React.FC = () => {
               timeframe={selectedTimeframe}
               signal={signal}
             />
+            <RecentSignalsPanel limit={15} />
           </div>
 
           <div className="space-y-4">
             <MetricsPanel signal={signal} />
+            <RiskPanel signal={signal} />
             <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-sm space-y-2">
               <h2 className="text-sm font-semibold text-slate-100">
                 How to use this bot

@@ -9,8 +9,18 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from bot.ai.explanation import generate_explanation
-from bot.api.schemas import CandlesResponse, BacktestResponse, TradeSignalResponse
+from bot.api.schemas import (
+    CandlesResponse,
+    BacktestResponse,
+    PositionSizingRequest,
+    PositionSizingResponse,
+    RecentSignalsResponse,
+    SignalHistoryItem,
+    TradeSignalResponse,
+)
 from bot.backtest.engine import Backtester, BacktestResult
+from bot.data.repository import DataRepository
+from bot.engine.risk import calculate_position_sizing
 from bot.engine.orchestrator import SignalEngine
 from bot.indicators.core import add_basic_indicators
 from bot.models import (
@@ -47,7 +57,8 @@ app.add_middleware(
 
 
 signal_engine = SignalEngine()
-backtester = Backtester()
+repository = DataRepository()
+backtester = Backtester(repository)
 
 
 STRATEGY_MAP: dict[str, Type[BaseStrategy]] = {
@@ -95,6 +106,8 @@ def get_signal(
         signal=signal,
         context=signal.context,
     )
+
+    repository.log_signal(signal)
 
     return TradeSignalResponse(
         simple_explanation=explanation,
@@ -195,3 +208,31 @@ def run_backtest(
     )
 
     return BacktestResponse(**result.__dict__)
+
+
+@app.get("/signals/recent", response_model=RecentSignalsResponse)
+def get_recent_signals(limit: int = 20) -> RecentSignalsResponse:
+    capped_limit = min(max(limit, 1), 100)
+    rows = repository.get_recent_signals(limit=capped_limit)
+
+    items = [
+        SignalHistoryItem(
+            id=row["id"],
+            created_at=row["created_at"],
+            symbol=row["symbol"],
+            timeframe=row["timeframe"],
+            action=TradeAction(row["action"]),
+            strategy_name=row["strategy_name"],
+            risk_rating=RiskRating(row["risk_rating"]),
+            confidence_score=float(row["confidence_score"]),
+            regime=MarketRegime(row["regime"]),
+        )
+        for row in rows
+    ]
+
+    return RecentSignalsResponse(items=items)
+
+
+@app.post("/risk/position", response_model=PositionSizingResponse)
+def calculate_position(payload: PositionSizingRequest) -> PositionSizingResponse:
+    return calculate_position_sizing(payload)
