@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  BacktestHistoryItem,
+  type BacktestHistoryItem,
   fetchRecentBacktests,
 } from "../lib/api";
 
