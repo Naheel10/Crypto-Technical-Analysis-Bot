@@ -48,7 +48,7 @@ class SignalEngine:
         self,
         symbol: str,
         timeframe: str,
-        limit: int = 200,
+        limit: int = 400,
         use_mock: bool = False,
         enabled_strategies: List[str] | None = None,
     ) -> Optional[TradeSignal]:
@@ -69,18 +69,28 @@ class SignalEngine:
                 timeframe=timeframe,
                 limit=limit,
             )
-            print(f"[SignalEngine] Fetched {len(df)} candles for {symbol} {timeframe}")
+            print(
+                f"[SignalEngine] Fetched {len(df)} candles for {symbol} {timeframe} "
+                f"(requested {limit})"
+            )
 
             if df.empty:
                 print("[SignalEngine] No candles returned from exchange")
                 return None
 
             df = add_basic_indicators(df)
+            print(
+                f"[SignalEngine] After indicators (before dropna): {len(df)} rows"
+            )
             df = df.dropna()
-            print(f"[SignalEngine] After indicators & dropna: {len(df)} rows")
+            print(
+                f"[SignalEngine] After dropna: {len(df)} rows (indicator warmup removed)"
+            )
 
-            if len(df) == 0:
-                print("[SignalEngine] No rows after indicators (all NaN?)")
+            if len(df) < 120:
+                print(
+                    "[SignalEngine] Not enough history after indicator warmup for a stable read"
+                )
                 return None
 
         # 2) Regime
@@ -98,6 +108,10 @@ class SignalEngine:
             strategies = [
                 s for s in strategies if getattr(s, "name", "") in enabled_set
             ]
+        if not strategies:
+            print(
+                f"[SignalEngine] No strategies mapped for regime={regime} with enabled filter={enabled_strategies}"
+            )
         print(
             "[SignalEngine] Strategies for regime",
             regime,

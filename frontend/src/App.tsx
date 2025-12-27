@@ -99,65 +99,69 @@ const App: React.FC = () => {
       </div>
 
       {activeTab === "live" ? (
-        <div className="grid gap-6 lg:grid-cols-[2fr,1.2fr]">
-          <div className="space-y-4">
-            <SignalForm
-              onSignalLoaded={setSignal}
-              selectedSymbol={selectedSymbol}
-              selectedTimeframe={selectedTimeframe}
-              enabledStrategies={enabledStrategies}
-              onSelectionChange={({ symbol, timeframe }) => {
-                setSelectedSymbol(symbol);
-                setSelectedTimeframe(timeframe);
-              }}
-            />
-            {signal && <SignalCard signal={signal} />}
-            <ChartPanel
-              symbol={selectedSymbol}
-              timeframe={selectedTimeframe}
-              signal={signal}
-            />
-            <RecentSignalsPanel limit={15} />
-          </div>
+        <div className="space-y-6">
+          <SignalForm
+            onSignalLoaded={setSignal}
+            selectedSymbol={selectedSymbol}
+            selectedTimeframe={selectedTimeframe}
+            enabledStrategies={enabledStrategies}
+            onSelectionChange={({ symbol, timeframe }) => {
+              setSelectedSymbol(symbol);
+              setSelectedTimeframe(timeframe);
+            }}
+          />
 
-          <div className="space-y-4">
-            <MetricsPanel signal={signal} />
-            <RiskPanel signal={signal} />
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-sm space-y-2">
-              <h2 className="text-sm font-semibold text-slate-100">
-                How to use this bot
-              </h2>
-              <p className="text-slate-300">
-                1. Choose a coin and timeframe. The bot scans the chart using
-                predefined technical analysis strategies.
-              </p>
-              <p className="text-slate-300">
-                2. It labels the market regime and outputs{" "}
-                <span className="font-semibold">BUY</span>,{" "}
-                <span className="font-semibold">SELL</span>, or{" "}
-                <span className="font-semibold">NO&nbsp;TRADE</span> with a
-                plain English explanation.
-              </p>
-              <p className="text-slate-400 text-xs">
-                This is an educational decision-support tool. It does not
-                connect to your wallet and does not guarantee profit or protect
-                you from loss.
-              </p>
+          {signal && <SignalCard signal={signal} />}
+
+          <div className="grid gap-6 xl:grid-cols-[1.6fr,1fr]">
+            <div className="space-y-4">
+              <ChartPanel
+                symbol={selectedSymbol}
+                timeframe={selectedTimeframe}
+                signal={signal}
+              />
+              <RecentSignalsPanel limit={15} />
+            </div>
+
+            <div className="space-y-4">
+              <MetricsPanel signal={signal} />
+              <RiskPanel signal={signal} />
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-sm space-y-2">
+                <h2 className="text-sm font-semibold text-slate-100">
+                  How to use this bot
+                </h2>
+                <p className="text-slate-300">
+                  1. Choose a coin and timeframe. The bot scans the chart using
+                  predefined technical analysis strategies.
+                </p>
+                <p className="text-slate-300">
+                  2. It labels the market regime and outputs{" "}
+                  <span className="font-semibold">BUY</span>,{" "}
+                  <span className="font-semibold">SELL</span>, or{" "}
+                  <span className="font-semibold">NO&nbsp;TRADE</span> with a
+                  plain English explanation.
+                </p>
+                <p className="text-slate-400 text-xs">
+                  This is an educational decision-support tool. It does not
+                  connect to your wallet and does not guarantee profit or
+                  protect you from loss.
+                </p>
+              </div>
             </div>
           </div>
         </div>
       ) : activeTab === "backtest" ? (
-        <div className="space-y-4">
-          <div className="grid gap-6 lg:grid-cols-[2fr,1.2fr]">
-            <div className="space-y-4">
-              <BacktestForm onBacktestLoaded={setBacktestResult} />
-            </div>
+        <div className="space-y-6">
+          <BacktestForm onBacktestLoaded={setBacktestResult} />
+
+          <div className="grid gap-6 lg:grid-cols-2">
             <div className="space-y-4">
               {backtestResult && <BacktestResultCard result={backtestResult} />}
             </div>
+            <div className="space-y-4">
+              <BacktestHistoryPanel limit={15} />
+            </div>
           </div>
-
-          <BacktestHistoryPanel limit={15} />
         </div>
       ) : activeTab === "watchlist" ? (
         <WatchlistPanel

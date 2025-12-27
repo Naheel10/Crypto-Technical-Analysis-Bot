@@ -14,11 +14,11 @@ _range_reversion = RangeReversionStrategy()
 # Map regimes to strategies; UNKNOWN gets both so we always try something
 _REGISTRY: Dict[MarketRegime, List[BaseStrategy]] = {
     MarketRegime.TREND_UP: [_trend_continuation],
-    MarketRegime.TREND_DOWN: [_trend_continuation],   # could become short-only later
+    MarketRegime.TREND_DOWN: [],
     MarketRegime.RANGE: [_range_reversion],
-    MarketRegime.CHOPPY: [_range_reversion],
+    MarketRegime.CHOPPY: [],
     MarketRegime.BREAKOUT: [_trend_continuation],
-    MarketRegime.UNKNOWN: [_trend_continuation, _range_reversion],
+    MarketRegime.UNKNOWN: [_trend_continuation],
 }
 
 
