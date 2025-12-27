@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Literal
+from typing import List, Optional
+
 
 from pydantic import BaseModel
 
@@ -39,11 +41,11 @@ class TradeSignalResponse(BaseModel):
 
 
 class SignalScanRequest(BaseModel):
-    symbols: list[str]
+    symbols: List[str]
     timeframe: str
     demo: bool = False
     limit: int = 200
-    enabled_strategies: list[str] | None = None
+    enabled_strategies: Optional[List[str]] = None
 
 
 class SignalSummary(BaseModel):
