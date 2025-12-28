@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import asdict
 from datetime import datetime
 from typing import Optional, Type
 
@@ -10,7 +11,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from bot.ai.explanation import generate_explanation
 from bot.api.schemas import (
+    AnalysisSnapshotSchema,
     CandlesResponse,
+    CandidateTradeSchema,
     BacktestResponse,
     BacktestHistoryItem,
     PositionSizingRequest,
@@ -151,13 +154,23 @@ def get_signal(
 
     repository.log_signal(log_signal)
 
+    analysis_schema = AnalysisSnapshotSchema.model_validate(asdict(result.analysis))
+    primary_schema = (
+        CandidateTradeSchema.model_validate(asdict(result.primary_candidate))
+        if result.primary_candidate
+        else None
+    )
+    candidate_schemas = [
+        CandidateTradeSchema.model_validate(asdict(c)) for c in result.all_candidates
+    ]
+
     return TradeSignalResponse(
         symbol=symbol,
         timeframe=timeframe,
         regime=result.regime,
-        analysis=result.analysis,
-        primary_candidate=result.primary_candidate,
-        all_candidates=result.all_candidates,
+        analysis=analysis_schema,
+        primary_candidate=primary_schema,
+        all_candidates=candidate_schemas,
         simple_explanation=explanation,
     )
 
