@@ -31,10 +31,24 @@ class BacktestResult:
 
 class Backtester:
     """
-    Very simple backtest engine for one strategy.
+    Simple but robust backtest engine for a single strategy.
 
-    Uses basic assumptions and close to close fills.
+    Design choices (to avoid the issues you were seeing):
+
+    - We **do not** try to reconstruct an exact historical date window via the DB.
+      Instead, we fetch a large chunk of recent candles directly from the exchange,
+      just like the /candles endpoint that already works.
+    - We still *approximate* the user’s requested window (start/end) when choosing
+      which part of the data to trade on, but we never rely on the exchange's
+      `since` behaviour (which is flaky across venues).
+    - Indicators get plenty of warm-up candles so `dropna()` does not nuke
+      the entire DataFrame.
     """
+
+    # how many bars we want to trade at minimum
+    MIN_CORE_BARS = 100
+    # extra bars before the trading window for indicator warmup
+    WARMUP_BARS = 250
 
     def __init__(
         self,
@@ -44,11 +58,18 @@ class Backtester:
         self.repository = repository or DataRepository()
         self.exchange_client = exchange_client or ExchangeClient()
 
+    # ------------------------------------------------------------------ #
+    # Helpers
+    # ------------------------------------------------------------------ #
+
     def _timeframe_to_timedelta(self, timeframe: str) -> timedelta:
+        """
+        Convert strings like '1h', '4h', '15m', '1d' into a timedelta.
+        """
         unit = timeframe[-1]
         try:
             value = int(timeframe[:-1])
-        except ValueError as exc:  # pragma: no cover - defensive parsing
+        except ValueError as exc:
             raise ValueError(f"Invalid timeframe: {timeframe}") from exc
 
         mapping = {
@@ -62,43 +83,24 @@ class Backtester:
             raise ValueError(f"Unsupported timeframe unit: {unit}")
         return mapping[unit]
 
-    def _has_requested_range(
-        self,
-        candles: pd.DataFrame,
-        start: datetime,
-        end: datetime,
-        timeframe_delta: timedelta,
-    ) -> bool:
-        if candles.empty:
-            return False
-        earliest = candles["timestamp"].min()
-        latest = candles["timestamp"].max()
-        return earliest <= (start + timeframe_delta) and latest >= (end - timeframe_delta)
+    def _compute_bars_needed(self, timeframe: str, start: datetime, end: datetime) -> int:
+        """
+        Roughly estimate how many bars we want to trade over the requested window,
+        then add warmup bars for indicators.
+        """
+        tf_delta = self._timeframe_to_timedelta(timeframe)
+        span_seconds = max((end - start).total_seconds(), 0.0)
+        per_bar = tf_delta.total_seconds() or 1.0
 
-    def _load_candles_with_backfill(
-        self,
-        symbol: str,
-        timeframe: str,
-        start: datetime,
-        end: datetime,
-        timeframe_delta: timedelta,
-    ) -> pd.DataFrame:
-        candles = self.repository.load_candles(symbol, timeframe, start, end)
-        if self._has_requested_range(candles, start, end, timeframe_delta):
-            return candles
+        core_bars = int(span_seconds / per_bar)
+        if core_bars < self.MIN_CORE_BARS:
+            core_bars = self.MIN_CORE_BARS
 
-        fetched = self.exchange_client.sync_historical_candles(
-            symbol=symbol, timeframe=timeframe, since=start, end=end
-        )
-        if fetched.empty:
-            return candles
+        return core_bars + self.WARMUP_BARS
 
-        filtered = fetched[(fetched["timestamp"] >= start) & (fetched["timestamp"] <= end)]
-        if filtered.empty:
-            return candles
-
-        self.repository.save_candles(symbol, timeframe, filtered)
-        return self.repository.load_candles(symbol, timeframe, start, end)
+    # ------------------------------------------------------------------ #
+    # Main backtest entrypoint
+    # ------------------------------------------------------------------ #
 
     def run_backtest(
         self,
@@ -108,7 +110,15 @@ class Backtester:
         start: datetime,
         end: datetime,
     ) -> BacktestResult:
-        """Run a bar by bar backtest."""
+        """
+        Run a bar-by-bar backtest.
+
+        NOTE: We *approximate* the requested [start, end] using the most recent
+        candles from the exchange. The actual start/end used are stored in the
+        BacktestResult and shown in your history table.
+        """
+
+        # normalise datetimes (we keep everything naive/UTC)
         if start.tzinfo is not None:
             start = start.replace(tzinfo=None)
         if end.tzinfo is not None:
@@ -117,25 +127,80 @@ class Backtester:
         if start >= end:
             raise ValueError("Backtest start must be before end")
 
-        timeframe_delta = self._timeframe_to_timedelta(timeframe)
         now = datetime.utcnow()
-        if end - now > timeframe_delta:
+        if end > now:
             raise ValueError("End date cannot be in the future")
 
-        candles = self._load_candles_with_backfill(
-            symbol, timeframe, start, end, timeframe_delta
+        # How many bars do we want in total (core + warmup)?
+        limit = self._compute_bars_needed(timeframe, start, end)
+
+        # ------------------------------------------------------------------
+        # 1) Fetch recent candles directly from the exchange (same as /candles)
+        # ------------------------------------------------------------------
+        candles = self.exchange_client.get_recent_candles(
+            symbol=symbol,
+            timeframe=timeframe,
+            limit=limit,
         )
-        candles = add_basic_indicators(candles)
-        candles = candles.dropna()
+        if candles is None or candles.empty:
+            raise ValueError(
+                "No candles available from the exchange for that market/timeframe."
+            )
+
         candles = candles.sort_values("timestamp").reset_index(drop=True)
 
-        if candles.empty:
-            raise ValueError("No candles available for the requested range")
+        # ------------------------------------------------------------------
+        # 2) Add indicators and drop warmup rows with NaNs
+        # ------------------------------------------------------------------
+        candles = add_basic_indicators(candles)
+        before_dropna = len(candles)
+        candles = candles.dropna().reset_index(drop=True)
 
-        print(
-            f"[Backtester] Loaded {len(candles)} candles for {symbol} {timeframe}"
+        if candles.empty:
+            raise ValueError(
+                "No usable candles after applying indicators (dropna removed all rows). "
+                "Try a longer lookback window or a higher timeframe."
+            )
+
+        # ------------------------------------------------------------------
+        # 3) Approximate the requested date window inside this data
+        # ------------------------------------------------------------------
+        # We try to keep only rows between [start, end]. If that gives us too
+        # few candles (because the exchange only returned very recent data),
+        # we just use the last MIN_CORE_BARS candles as the trading window.
+        tf_delta = self._timeframe_to_timedelta(timeframe)
+        approx_core_bars = max(
+            int((end - start).total_seconds() / tf_delta.total_seconds()),
+            self.MIN_CORE_BARS,
         )
 
+        window = candles[
+            (candles["timestamp"] >= start) & (candles["timestamp"] <= end)
+        ].copy()
+
+        if len(window) < 50:
+            # fallback: just take the most recent slice
+            window = candles.iloc[-approx_core_bars :].copy()
+
+        if window.empty:
+            raise ValueError(
+                "No candles available for the requested range (even after warmup). "
+                "Try a more recent range or different timeframe."
+            )
+
+        # This is the actual window we will trade on
+        candles = window.reset_index(drop=True)
+        actual_start = candles["timestamp"].iloc[0].to_pydatetime().replace(tzinfo=None)
+        actual_end = candles["timestamp"].iloc[-1].to_pydatetime().replace(tzinfo=None)
+
+        print(
+            f"[Backtester] Using {len(candles)} candles for {symbol} {timeframe} "
+            f"(fetched={before_dropna}, window={actual_start} → {actual_end})"
+        )
+
+        # ------------------------------------------------------------------
+        # 4) Run the strategy bar-by-bar
+        # ------------------------------------------------------------------
         strategy = strategy_cls()
 
         trades: list[float] = []
@@ -163,6 +228,7 @@ class Backtester:
 
         for idx, row in candles.iterrows():
             history = candles.iloc[: idx + 1]
+
             regime = detect_regime(history)
             try:
                 candidates = strategy.generate_candidates(
@@ -175,15 +241,17 @@ class Backtester:
                 candidates = []
 
             primary = select_primary_candidate(candidates)
-            candidate_action = primary.direction if primary else None
+            primary_direction = primary.direction if primary else None
 
             high = float(row["high"])
             low = float(row["low"])
             close = float(row["close"])
 
+            # --- manage open position first ---
             if position:
                 exit_price: Optional[float] = None
                 if position["direction"] == 1:
+                    # long
                     if (
                         position.get("stop_loss") is not None
                         and low <= float(position["stop_loss"])
@@ -194,9 +262,10 @@ class Backtester:
                         and high >= float(position["take_profit"])
                     ):
                         exit_price = float(position["take_profit"])
-                    elif candidate_action == TradeDirection.SHORT:
+                    elif primary_direction == TradeDirection.SHORT:
                         exit_price = close
                 else:
+                    # short
                     if (
                         position.get("stop_loss") is not None
                         and high >= float(position["stop_loss"])
@@ -207,13 +276,14 @@ class Backtester:
                         and low <= float(position["take_profit"])
                     ):
                         exit_price = float(position["take_profit"])
-                    elif candidate_action == TradeDirection.LONG:
+                    elif primary_direction == TradeDirection.LONG:
                         exit_price = close
 
                 if exit_price is not None:
                     close_position(exit_price)
 
-            if position is None and primary:
+            # --- open new position if flat and we have a valid candidate ---
+            if position is None and primary is not None:
                 direction = 1 if primary.direction == TradeDirection.LONG else -1
                 take_profit = (
                     primary.take_profits[0] if primary.take_profits else None
@@ -230,6 +300,9 @@ class Backtester:
         if position is not None:
             close_position(float(candles.iloc[-1]["close"]))
 
+        # ------------------------------------------------------------------
+        # 5) Compute stats
+        # ------------------------------------------------------------------
         trades_count = len(trades)
         wins = len([t for t in trades if t > 0])
         gross_profit = sum(t for t in trades if t > 0)
@@ -238,30 +311,29 @@ class Backtester:
         win_rate = (wins / trades_count * 100) if trades_count else 0.0
         total_return_pct = (equity - 1) * 100
         max_drawdown_pct = max_drawdown * 100
-        profit_factor = gross_profit / gross_loss if gross_loss > 0 else (
-            float("inf") if gross_profit > 0 else 0.0
-        )
+        if gross_loss > 0:
+            profit_factor = gross_profit / gross_loss
+        else:
+            profit_factor = float("inf") if gross_profit > 0 else 0.0
 
         print(
-            "[Backtester] Trades taken:",
+            "[Backtester] Trades:",
             trades_count,
             f"win_rate={win_rate:.2f}%",
             f"total_return={total_return_pct:.2f}%",
-            f"max_drawdown={max_drawdown_pct:.2f}%",
-            f"profit_factor={'∞' if profit_factor == float('inf') else profit_factor:.2f}",
+            f"max_dd={max_drawdown_pct:.2f}%",
+            f"pf={'∞' if profit_factor == float('inf') else profit_factor:.2f}",
         )
 
-        result = BacktestResult(
+        return BacktestResult(
             symbol=symbol,
             timeframe=timeframe,
             strategy_name=strategy.name,
-            start=start,
-            end=end,
+            start=actual_start,
+            end=actual_end,
             win_rate=win_rate,
             total_return_pct=total_return_pct,
             max_drawdown_pct=max_drawdown_pct,
             profit_factor=profit_factor,
             trades_count=trades_count,
         )
-
-        return result

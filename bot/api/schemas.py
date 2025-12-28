@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple, Literal
+from typing import Union, Dict, List, Optional, Tuple, Literal
+
 
 from datetime import datetime
 from typing import Literal
@@ -38,7 +39,7 @@ class StrategyListResponse(BaseModel):
 
 class CandidateTradeSchema(BaseModel):
     direction: TradeDirection
-    setup_type: SetupType | str
+    setup_type: Union[SetupType, str]
     entry_zone: Optional[Tuple[float, float]] = None
     stop_loss: Optional[float] = None
     take_profits: Optional[List[float]] = None

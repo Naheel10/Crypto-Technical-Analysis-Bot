@@ -177,72 +177,80 @@ class DataRepository:
             conn.close()
 
     def log_backtest(self, result) -> None:
-        """Persist a backtest result for history browsing."""
+        """Persist a backtest result for history browsing.
+
+        This is schema-compatible with both:
+        - old tables that used start_ts / end_ts
+        - newer tables that use start / end
+        """
 
         conn = self._connect()
         try:
-            conn.execute(
-                """
-                INSERT INTO backtests (
-                    created_at, symbol, timeframe, strategy_name, start, end,
-                    win_rate, total_return_pct, max_drawdown_pct, profit_factor, trades_count
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    int(datetime.utcnow().timestamp()),
-                    result.symbol,
-                    result.timeframe,
-                    result.strategy_name,
-                    int(result.start.timestamp()),
-                    int(result.end.timestamp()),
-                    float(result.win_rate),
-                    float(result.total_return_pct),
-                    float(result.max_drawdown_pct),
-                    float(result.profit_factor),
-                    int(result.trades_count),
-                ),
+            # Discover existing columns on this DB so we can adapt
+            cur = conn.execute("PRAGMA table_info(backtests)")
+            col_names = [row[1] for row in cur.fetchall()]
+
+            # Base columns we always want
+            cols: list[str] = [
+                "created_at",
+                "symbol",
+                "timeframe",
+                "strategy_name",
+            ]
+
+            # Prefer legacy start_ts / end_ts if present, otherwise start / end
+            start_col = "start_ts" if "start_ts" in col_names else "start"
+            end_col = "end_ts" if "end_ts" in col_names else "end"
+
+            cols.extend([start_col, end_col])
+
+            cols.extend(
+                [
+                    "win_rate",
+                    "total_return_pct",
+                    "max_drawdown_pct",
+                    "profit_factor",
+                    "trades_count",
+                ]
             )
+
+            placeholders = ", ".join("?" for _ in cols)
+            sql = f"INSERT INTO backtests ({', '.join(cols)}) VALUES ({placeholders})"
+
+            created_ts = int(datetime.utcnow().timestamp())
+            start_ts = int(result.start.timestamp())
+            end_ts = int(result.end.timestamp())
+
+            values: list[object] = []
+            for c in cols:
+                if c == "created_at":
+                    values.append(created_ts)
+                elif c == "symbol":
+                    values.append(result.symbol)
+                elif c == "timeframe":
+                    values.append(result.timeframe)
+                elif c == "strategy_name":
+                    values.append(result.strategy_name)
+                elif c in ("start", "start_ts"):
+                    values.append(start_ts)
+                elif c in ("end", "end_ts"):
+                    values.append(end_ts)
+                elif c == "win_rate":
+                    values.append(float(result.win_rate))
+                elif c == "total_return_pct":
+                    values.append(float(result.total_return_pct))
+                elif c == "max_drawdown_pct":
+                    values.append(float(result.max_drawdown_pct))
+                elif c == "profit_factor":
+                    values.append(float(result.profit_factor))
+                elif c == "trades_count":
+                    values.append(int(result.trades_count))
+
+            conn.execute(sql, values)
             conn.commit()
         finally:
             conn.close()
 
-    def get_recent_backtests(self, limit: int = 20) -> list[dict]:
-        """Return the most recent backtests ordered newest first."""
-
-        conn = self._connect()
-        try:
-            cursor = conn.execute(
-                """
-                SELECT
-                    id, created_at, symbol, timeframe, strategy_name, start, end,
-                    win_rate, total_return_pct, max_drawdown_pct, profit_factor, trades_count
-                FROM backtests
-                ORDER BY created_at DESC
-                LIMIT ?
-                """,
-                (limit,),
-            )
-            rows = cursor.fetchall()
-            return [
-                {
-                    "id": row[0],
-                    "created_at": datetime.utcfromtimestamp(row[1]),
-                    "symbol": row[2],
-                    "timeframe": row[3],
-                    "strategy_name": row[4],
-                    "start": datetime.utcfromtimestamp(row[5]),
-                    "end": datetime.utcfromtimestamp(row[6]),
-                    "win_rate": float(row[7]),
-                    "total_return_pct": float(row[8]),
-                    "max_drawdown_pct": float(row[9]),
-                    "profit_factor": float(row[10]),
-                    "trades_count": int(row[11]),
-                }
-                for row in rows
-            ]
-        finally:
-            conn.close()
 
     def log_signal(self, signal) -> None:
         """Persist a TradeSignal for history/auditing."""

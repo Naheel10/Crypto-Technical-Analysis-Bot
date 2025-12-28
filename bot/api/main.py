@@ -71,7 +71,13 @@ app.add_middleware(
 
 signal_engine = SignalEngine()
 repository = DataRepository()
-backtester = Backtester(repository)
+
+# IMPORTANT: reuse the SAME exchange client as the signal engine
+backtester = Backtester(
+    repository=repository,
+    exchange_client=signal_engine.exchange_client,
+)
+
 
 
 STRATEGY_MAP: dict[str, Type[BaseStrategy]] = {
