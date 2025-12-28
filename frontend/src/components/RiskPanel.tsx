@@ -17,18 +17,19 @@ export const RiskPanel: React.FC<Props> = ({ signal }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const canCalculate = Boolean(signal && signal.stop_loss !== null);
+  const primary = signal?.primary_candidate;
+  const canCalculate = Boolean(primary && primary.stop_loss !== null);
 
   const handleCalculate = async () => {
-    if (!signal || signal.stop_loss === null) {
+    if (!primary || primary.stop_loss === null) {
       return;
     }
 
-    const entryPrice = signal.entry_zone
-      ? (signal.entry_zone[0] + signal.entry_zone[1]) / 2
-      : signal.context?.close;
+    const entryPrice = primary.entry_zone
+      ? (primary.entry_zone[0] + primary.entry_zone[1]) / 2
+      : signal?.analysis.latest_price;
 
-    if (!entryPrice || !signal.stop_loss) {
+    if (!entryPrice || !primary.stop_loss) {
       setError("Missing entry or stop loss to size a position.");
       return;
     }
@@ -37,13 +38,13 @@ export const RiskPanel: React.FC<Props> = ({ signal }) => {
     setError(null);
 
     try {
-      const data = await calculatePositionSizing({
-        account_size: accountSize,
-        risk_pct: riskPct / 100,
-        entry_price: entryPrice,
-        stop_loss: signal.stop_loss,
-        take_profits: signal.take_profits || undefined,
-      });
+        const data = await calculatePositionSizing({
+          account_size: accountSize,
+          risk_pct: riskPct / 100,
+          entry_price: entryPrice,
+          stop_loss: primary.stop_loss,
+          take_profits: primary.take_profits || undefined,
+        });
       setResult(data);
     } catch (err) {
       console.error(err);
@@ -133,7 +134,7 @@ export const RiskPanel: React.FC<Props> = ({ signal }) => {
               )}
               <p className="text-slate-400">
                 If you risk {riskPct}% of a ${accountSize.toLocaleString()} account, this position
-                would risk ${result.risk_amount.toFixed(2)} with stop-loss at {signal?.stop_loss?.toFixed(2)}.
+                would risk ${result.risk_amount.toFixed(2)} with stop-loss at {primary?.stop_loss?.toFixed(2)}.
               </p>
             </div>
           )}

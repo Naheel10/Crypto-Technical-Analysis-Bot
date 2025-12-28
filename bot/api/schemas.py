@@ -2,12 +2,23 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Literal
-from typing import List, Optional
 
+from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel
 
-from bot.models import MarketRegime, RiskRating, TradeAction
+from bot.models import (
+    MarketRegime,
+    MarketStructure,
+    MomentumState,
+    RiskRating,
+    SetupType,
+    TradeAction,
+    TradeDirection,
+    TrendBias,
+    VolatilityRegime,
+)
 from bot.engine.risk import PositionSizingRequest, PositionSizingResponse
 
 
@@ -25,18 +36,41 @@ class StrategyListResponse(BaseModel):
     items: list[StrategyInfo]
 
 
-class TradeSignalResponse(BaseModel):
-    symbol: str
-    timeframe: str
-    action: TradeAction
-    strategy_name: str
+class CandidateTradeSchema(BaseModel):
+    direction: TradeDirection
+    setup_type: SetupType | str
     entry_zone: Optional[Tuple[float, float]] = None
     stop_loss: Optional[float] = None
     take_profits: Optional[List[float]] = None
+    quality_score: float
     risk_rating: RiskRating
-    confidence_score: float
+    notes: str
+    strategy_name: str
+
+
+class AnalysisSnapshotSchema(BaseModel):
+    symbol: str
+    timeframe: str
+    trend_bias: TrendBias
+    structure: MarketStructure
+    momentum_state: MomentumState
+    volatility_regime: VolatilityRegime
+    key_levels: List[Tuple[float, float]]
+    latest_price: float
+    ema20: Optional[float] = None
+    ema50: Optional[float] = None
+    ema200: Optional[float] = None
+    rsi14: Optional[float] = None
+    macd_hist: Optional[float] = None
+
+
+class TradeSignalResponse(BaseModel):
+    symbol: str
+    timeframe: str
     regime: MarketRegime
-    context: Dict[str, float]
+    analysis: AnalysisSnapshotSchema
+    primary_candidate: Optional[CandidateTradeSchema] = None
+    all_candidates: List[CandidateTradeSchema]
     simple_explanation: Optional[str] = None
 
 

@@ -1,5 +1,6 @@
 // frontend/src/lib/api.ts
 export type TradeAction = "BUY" | "SELL" | "NO_TRADE";
+export type TradeDirection = "LONG" | "SHORT";
 export type RiskRating = "LOW" | "MEDIUM" | "HIGH";
 export type RiskProfile = "conservative" | "moderate" | "aggressive";
 export type MarketRegime =
@@ -9,6 +10,24 @@ export type MarketRegime =
   | "CHOPPY"
   | "BREAKOUT"
   | "UNKNOWN";
+
+export type TrendBias =
+  | "STRONGLY_BULLISH"
+  | "BULLISH"
+  | "NEUTRAL"
+  | "BEARISH"
+  | "STRONGLY_BEARISH";
+
+export type MarketStructure = "TREND" | "RANGE" | "CHOP";
+export type MomentumState = "BUILDING" | "FADING" | "EXTREME";
+export type VolatilityRegime = "LOW" | "NORMAL" | "HIGH" | "INSANE";
+export type SetupType =
+  | "PULLBACK"
+  | "BREAKOUT"
+  | "RANGE_REVERSION"
+  | "TREND_EXIT"
+  | "MOMENTUM_FADE"
+  | string;
 
 export interface StrategyInfo {
   name: string;
@@ -21,18 +40,41 @@ export interface StrategyListResponse {
   items: StrategyInfo[];
 }
 
-export interface TradeSignalResponse {
-  symbol: string;
-  timeframe: string;
-  action: TradeAction;
-  strategy_name: string;
+export interface CandidateTrade {
+  direction: TradeDirection;
+  setup_type: SetupType;
   entry_zone: [number, number] | null;
   stop_loss: number | null;
   take_profits: number[] | null;
+  quality_score: number;
   risk_rating: RiskRating;
-  confidence_score: number;
+  notes: string;
+  strategy_name: string;
+}
+
+export interface AnalysisSnapshot {
+  symbol: string;
+  timeframe: string;
+  trend_bias: TrendBias;
+  structure: MarketStructure;
+  momentum_state: MomentumState;
+  volatility_regime: VolatilityRegime;
+  key_levels: [number, number][];
+  latest_price: number;
+  ema20?: number | null;
+  ema50?: number | null;
+  ema200?: number | null;
+  rsi14?: number | null;
+  macd_hist?: number | null;
+}
+
+export interface TradeSignalResponse {
+  symbol: string;
+  timeframe: string;
   regime: MarketRegime;
-  context: Record<string, number>;
+  analysis: AnalysisSnapshot;
+  primary_candidate: CandidateTrade | null;
+  all_candidates: CandidateTrade[];
   simple_explanation: string | null;
 }
 
