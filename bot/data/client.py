@@ -43,6 +43,7 @@ class ExchangeClient:
         symbol: str,
         timeframe: str,
         since: Optional[datetime] = None,
+        end: Optional[datetime] = None,
         limit: int = 1000,
     ) -> pd.DataFrame:
         """
@@ -51,6 +52,7 @@ class ExchangeClient:
         For now returns a DataFrame. The repository can store it.
         """
         since_ms = int(since.timestamp() * 1000) if since else None
+        end_ms = int(end.timestamp() * 1000) if end else None
         all_rows = []
         while True:
             batch = self.exchange.fetch_ohlcv(
@@ -62,6 +64,8 @@ class ExchangeClient:
             if not batch:
                 break
             all_rows.extend(batch)
+            if end_ms and batch[-1][0] >= end_ms:
+                break
             if len(batch) < limit:
                 break
             since_ms = batch[-1][0] + 1
@@ -75,4 +79,6 @@ class ExchangeClient:
             columns=["timestamp", "open", "high", "low", "close", "volume"],
         )
         df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
+        if end is not None:
+            df = df[df["timestamp"] <= end]
         return df

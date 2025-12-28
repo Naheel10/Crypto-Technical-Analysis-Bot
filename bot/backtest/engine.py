@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Optional, Type
 
 import pandas as pd
 
 from bot.data.repository import DataRepository
+from bot.data.client import ExchangeClient
 from bot.indicators.core import add_basic_indicators
 from bot.engine.regime import detect_regime
 from bot.models import TradeAction, TradeSignal
@@ -34,8 +35,58 @@ class Backtester:
     Uses basic assumptions and close to close fills.
     """
 
-    def __init__(self, repository: Optional[DataRepository] = None) -> None:
+    def __init__(
+        self,
+        repository: Optional[DataRepository] = None,
+        exchange_client: Optional[ExchangeClient] = None,
+    ) -> None:
         self.repository = repository or DataRepository()
+        self.exchange_client = exchange_client or ExchangeClient()
+
+    def _timeframe_to_timedelta(self, timeframe: str) -> timedelta:
+        unit = timeframe[-1]
+        try:
+            value = int(timeframe[:-1])
+        except ValueError as exc:  # pragma: no cover - defensive parsing
+            raise ValueError(f"Invalid timeframe: {timeframe}") from exc
+
+        mapping = {
+            "s": timedelta(seconds=value),
+            "m": timedelta(minutes=value),
+            "h": timedelta(hours=value),
+            "d": timedelta(days=value),
+            "w": timedelta(weeks=value),
+        }
+        if unit not in mapping:
+            raise ValueError(f"Unsupported timeframe unit: {unit}")
+        return mapping[unit]
+
+    def _has_requested_range(
+        self, candles: pd.DataFrame, start: datetime, end: datetime
+    ) -> bool:
+        if candles.empty:
+            return False
+        return candles["timestamp"].min() <= start and candles["timestamp"].max() >= end
+
+    def _load_candles_with_backfill(
+        self, symbol: str, timeframe: str, start: datetime, end: datetime
+    ) -> pd.DataFrame:
+        candles = self.repository.load_candles(symbol, timeframe, start, end)
+        if self._has_requested_range(candles, start, end):
+            return candles
+
+        fetched = self.exchange_client.sync_historical_candles(
+            symbol=symbol, timeframe=timeframe, since=start, end=end
+        )
+        if fetched.empty:
+            return candles
+
+        filtered = fetched[(fetched["timestamp"] >= start) & (fetched["timestamp"] <= end)]
+        if filtered.empty:
+            return candles
+
+        self.repository.save_candles(symbol, timeframe, filtered)
+        return self.repository.load_candles(symbol, timeframe, start, end)
 
     def run_backtest(
         self,
@@ -46,7 +97,15 @@ class Backtester:
         end: datetime,
     ) -> BacktestResult:
         """Run a bar by bar backtest."""
-        candles = self.repository.load_candles(symbol, timeframe, start, end)
+        if start >= end:
+            raise ValueError("Backtest start must be before end")
+
+        timeframe_delta = self._timeframe_to_timedelta(timeframe)
+        now = datetime.utcnow()
+        if end - now > timeframe_delta:
+            raise ValueError("End date cannot be in the future")
+
+        candles = self._load_candles_with_backfill(symbol, timeframe, start, end)
         candles = add_basic_indicators(candles)
         candles = candles.dropna()
 
