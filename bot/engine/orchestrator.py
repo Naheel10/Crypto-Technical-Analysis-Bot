@@ -16,11 +16,26 @@ from bot.models import (
     MarketStructure,
     MomentumState,
     RiskRating,
+    SetupType,
     TradeDirection,
     TrendBias,
     VolatilityRegime,
 )
 from bot.strategy.registry import get_strategy_registry
+
+
+def select_primary_candidate(
+    candidates: list[CandidateTrade], min_quality: float = 0.45
+) -> Optional[CandidateTrade]:
+    """Pick the highest quality candidate above the minimum threshold."""
+
+    if not candidates:
+        return None
+
+    primary = max(candidates, key=lambda c: c.quality_score)
+    if primary.quality_score < min_quality:
+        return None
+    return primary
 
 
 def _mock_uptrend_df(n: int = 200) -> pd.DataFrame:
@@ -227,11 +242,7 @@ class SignalEngine:
 
         snapshot = self._build_snapshot(df, symbol, timeframe)
 
-        primary: Optional[CandidateTrade] = None
-        if all_candidates:
-            primary = max(all_candidates, key=lambda c: c.quality_score)
-            if primary.quality_score < 0.45:
-                primary = None
+        primary = select_primary_candidate(all_candidates)
 
         print(
             f"[SignalEngine] Selected primary quality={getattr(primary, 'quality_score', 0):.2f}"

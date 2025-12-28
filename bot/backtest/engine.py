@@ -10,7 +10,8 @@ from bot.data.repository import DataRepository
 from bot.data.client import ExchangeClient
 from bot.indicators.core import add_basic_indicators
 from bot.engine.regime import detect_regime
-from bot.models import TradeAction, TradeSignal
+from bot.engine.orchestrator import select_primary_candidate
+from bot.models import TradeDirection
 from bot.strategy.base import BaseStrategy
 
 
@@ -62,17 +63,28 @@ class Backtester:
         return mapping[unit]
 
     def _has_requested_range(
-        self, candles: pd.DataFrame, start: datetime, end: datetime
+        self,
+        candles: pd.DataFrame,
+        start: datetime,
+        end: datetime,
+        timeframe_delta: timedelta,
     ) -> bool:
         if candles.empty:
             return False
-        return candles["timestamp"].min() <= start and candles["timestamp"].max() >= end
+        earliest = candles["timestamp"].min()
+        latest = candles["timestamp"].max()
+        return earliest <= (start + timeframe_delta) and latest >= (end - timeframe_delta)
 
     def _load_candles_with_backfill(
-        self, symbol: str, timeframe: str, start: datetime, end: datetime
+        self,
+        symbol: str,
+        timeframe: str,
+        start: datetime,
+        end: datetime,
+        timeframe_delta: timedelta,
     ) -> pd.DataFrame:
         candles = self.repository.load_candles(symbol, timeframe, start, end)
-        if self._has_requested_range(candles, start, end):
+        if self._has_requested_range(candles, start, end, timeframe_delta):
             return candles
 
         fetched = self.exchange_client.sync_historical_candles(
@@ -97,6 +109,11 @@ class Backtester:
         end: datetime,
     ) -> BacktestResult:
         """Run a bar by bar backtest."""
+        if start.tzinfo is not None:
+            start = start.replace(tzinfo=None)
+        if end.tzinfo is not None:
+            end = end.replace(tzinfo=None)
+
         if start >= end:
             raise ValueError("Backtest start must be before end")
 
@@ -105,12 +122,19 @@ class Backtester:
         if end - now > timeframe_delta:
             raise ValueError("End date cannot be in the future")
 
-        candles = self._load_candles_with_backfill(symbol, timeframe, start, end)
+        candles = self._load_candles_with_backfill(
+            symbol, timeframe, start, end, timeframe_delta
+        )
         candles = add_basic_indicators(candles)
         candles = candles.dropna()
+        candles = candles.sort_values("timestamp").reset_index(drop=True)
 
         if candles.empty:
             raise ValueError("No candles available for the requested range")
+
+        print(
+            f"[Backtester] Loaded {len(candles)} candles for {symbol} {timeframe}"
+        )
 
         strategy = strategy_cls()
 
@@ -140,9 +164,18 @@ class Backtester:
         for idx, row in candles.iterrows():
             history = candles.iloc[: idx + 1]
             regime = detect_regime(history)
-            signal: Optional[TradeSignal] = strategy.generate_signal(
-                history, symbol, timeframe, regime
-            )
+            try:
+                candidates = strategy.generate_candidates(
+                    history, symbol, timeframe, regime
+                )
+            except Exception as exc:
+                print(
+                    f"[Backtester] Strategy {strategy.name} raised on bar {idx}: {exc!r}"
+                )
+                candidates = []
+
+            primary = select_primary_candidate(candidates)
+            candidate_action = primary.direction if primary else None
 
             high = float(row["high"])
             low = float(row["low"])
@@ -161,7 +194,7 @@ class Backtester:
                         and high >= float(position["take_profit"])
                     ):
                         exit_price = float(position["take_profit"])
-                    elif signal and signal.action == TradeAction.SELL:
+                    elif candidate_action == TradeDirection.SHORT:
                         exit_price = close
                 else:
                     if (
@@ -174,19 +207,18 @@ class Backtester:
                         and low <= float(position["take_profit"])
                     ):
                         exit_price = float(position["take_profit"])
-                    elif signal and signal.action == TradeAction.BUY:
+                    elif candidate_action == TradeDirection.LONG:
                         exit_price = close
 
                 if exit_price is not None:
                     close_position(exit_price)
 
-            if position is None and signal and signal.action in (
-                TradeAction.BUY,
-                TradeAction.SELL,
-            ):
-                direction = 1 if signal.action == TradeAction.BUY else -1
-                take_profit = signal.take_profits[0] if signal.take_profits else None
-                stop_loss = signal.stop_loss
+            if position is None and primary:
+                direction = 1 if primary.direction == TradeDirection.LONG else -1
+                take_profit = (
+                    primary.take_profits[0] if primary.take_profits else None
+                )
+                stop_loss = primary.stop_loss
                 position = {
                     "direction": direction,
                     "entry_price": close,
@@ -208,6 +240,15 @@ class Backtester:
         max_drawdown_pct = max_drawdown * 100
         profit_factor = gross_profit / gross_loss if gross_loss > 0 else (
             float("inf") if gross_profit > 0 else 0.0
+        )
+
+        print(
+            "[Backtester] Trades taken:",
+            trades_count,
+            f"win_rate={win_rate:.2f}%",
+            f"total_return={total_return_pct:.2f}%",
+            f"max_drawdown={max_drawdown_pct:.2f}%",
+            f"profit_factor={'∞' if profit_factor == float('inf') else profit_factor:.2f}",
         )
 
         result = BacktestResult(
