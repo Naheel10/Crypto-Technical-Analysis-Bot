@@ -31,8 +31,10 @@ from bot.engine.risk import calculate_position_sizing
 from bot.engine.orchestrator import SignalEngine
 from bot.indicators.core import add_basic_indicators
 from bot.models import (
+    AnalysisResult,
     TradeSignal,
     TradeAction,
+    TradeDirection,
     RiskRating,
     MarketRegime,
 )
@@ -93,7 +95,7 @@ def get_signal(
         enabled_list = [s.strip() for s in enabled_strategies.split(",") if s.strip()]
 
     try:
-        signal: Optional[TradeSignal] = signal_engine.generate_signal(
+        result: Optional[AnalysisResult] = signal_engine.generate_signal(
             symbol=symbol,
             timeframe=timeframe,
             use_mock=demo,
@@ -103,9 +105,37 @@ def get_signal(
         print("ERROR while generating signal:", repr(exc))
         raise HTTPException(status_code=500, detail=f"Signal generation failed: {exc}")
 
-    # If no strategy found a setup, return an explicit NO_TRADE signal
-    if signal is None:
-        signal = TradeSignal(
+    if result is None:
+        raise HTTPException(status_code=500, detail="Signal generation failed")
+
+    explanation = generate_explanation(
+        analysis=result.analysis,
+        primary=result.primary_candidate,
+    )
+
+    # Log best candidate (or NO_TRADE) for history UI reuse
+    if result.primary_candidate:
+        primary = result.primary_candidate
+        action = (
+            TradeAction.BUY
+            if primary.direction == TradeDirection.LONG
+            else TradeAction.SELL
+        )
+        log_signal = TradeSignal(
+            symbol=symbol,
+            timeframe=timeframe,
+            action=action,
+            strategy_name=primary.strategy_name,
+            entry_zone=primary.entry_zone,
+            stop_loss=primary.stop_loss,
+            take_profits=primary.take_profits,
+            risk_rating=primary.risk_rating,
+            confidence_score=primary.quality_score,
+            regime=result.regime,
+            context={},
+        )
+    else:
+        log_signal = TradeSignal(
             symbol=symbol,
             timeframe=timeframe,
             action=TradeAction.NO_TRADE,
@@ -115,20 +145,20 @@ def get_signal(
             take_profits=None,
             risk_rating=RiskRating.LOW,
             confidence_score=0.0,
-            regime=MarketRegime.UNKNOWN,
+            regime=result.regime,
             context={},
         )
 
-    explanation = generate_explanation(
-        signal=signal,
-        context=signal.context,
-    )
-
-    repository.log_signal(signal)
+    repository.log_signal(log_signal)
 
     return TradeSignalResponse(
+        symbol=symbol,
+        timeframe=timeframe,
+        regime=result.regime,
+        analysis=result.analysis,
+        primary_candidate=result.primary_candidate,
+        all_candidates=result.all_candidates,
         simple_explanation=explanation,
-        **signal.to_dict(),
     )
 
 @app.post("/signals/scan", response_model=SignalScanResponse)
@@ -147,7 +177,7 @@ def scan_signals(payload: SignalScanRequest) -> SignalScanResponse:
 
     for symbol in payload.symbols:
         try:
-            signal: Optional[TradeSignal] = signal_engine.generate_signal(
+            result = signal_engine.generate_signal(
                 symbol=symbol,
                 timeframe=payload.timeframe,
                 limit=payload.limit,
@@ -161,30 +191,32 @@ def scan_signals(payload: SignalScanRequest) -> SignalScanResponse:
                 detail=f"Signal generation failed for {symbol}: {exc}",
             )
 
-        if signal is None:
-            signal = TradeSignal(
-                symbol=symbol,
-                timeframe=payload.timeframe,
-                action=TradeAction.NO_TRADE,
-                strategy_name="NoValidSetup",
-                entry_zone=None,
-                stop_loss=None,
-                take_profits=None,
-                risk_rating=RiskRating.LOW,
-                confidence_score=0.0,
-                regime=MarketRegime.UNKNOWN,
-                context={},
+        primary = result.primary_candidate if result else None
+        action = TradeAction.NO_TRADE
+        strategy_name = "NoValidSetup"
+        risk_rating = RiskRating.LOW
+        confidence = 0.0
+        regime = result.regime if result else MarketRegime.UNKNOWN
+
+        if primary:
+            action = (
+                TradeAction.BUY
+                if primary.direction == TradeDirection.LONG
+                else TradeAction.SELL
             )
+            strategy_name = primary.strategy_name
+            risk_rating = primary.risk_rating
+            confidence = primary.quality_score
 
         summaries.append(
             SignalSummary(
                 symbol=symbol,
                 timeframe=payload.timeframe,
-                action=signal.action,
-                strategy_name=signal.strategy_name,
-                risk_rating=signal.risk_rating,
-                confidence_score=signal.confidence_score,
-                regime=signal.regime,
+                action=action,
+                strategy_name=strategy_name,
+                risk_rating=risk_rating,
+                confidence_score=confidence,
+                regime=regime,
                 created_at=datetime.utcnow(),
                 simple_explanation=None,
             )

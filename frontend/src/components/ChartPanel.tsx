@@ -110,9 +110,10 @@ export const ChartPanel: React.FC<Props> = ({ symbol, timeframe, signal }) => {
     return `M ${segments.join(" L ")}`;
   };
 
-  const entryLevels = signal?.entry_zone || null;
-  const stopLoss = signal?.stop_loss || null;
-  const takeProfits = signal?.take_profits || [];
+  const primary = signal?.primary_candidate || null;
+  const entryLevels = primary?.entry_zone || null;
+  const stopLoss = primary?.stop_loss || null;
+  const takeProfits = primary?.take_profits || [];
 
   const priceToY = (price: number) =>
     CHART_HEIGHT -

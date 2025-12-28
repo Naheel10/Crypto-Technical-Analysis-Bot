@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import List
 
 import pandas as pd
 
-from bot.models import MarketRegime, TradeSignal
+from bot.models import CandidateTrade, MarketRegime
 
 
 class BaseStrategy(ABC):
@@ -14,16 +14,13 @@ class BaseStrategy(ABC):
     name: str
 
     @abstractmethod
-    def generate_signal(
+    def generate_candidates(
         self,
         df: pd.DataFrame,
         symbol: str,
         timeframe: str,
         regime: MarketRegime,
-    ) -> Optional[TradeSignal]:
-        """
-        Inspect the latest candles and emit a TradeSignal or None.
+    ) -> List[CandidateTrade]:
+        """Inspect the latest candles and emit possible trade ideas."""
 
-        df is assumed to already have indicators added.
-        """
         raise NotImplementedError

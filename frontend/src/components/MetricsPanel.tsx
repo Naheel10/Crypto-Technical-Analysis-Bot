@@ -21,14 +21,13 @@ export const MetricsPanel: React.FC<Props> = ({ signal }) => {
     );
   }
 
-  const ctx = signal.context || {};
-  const items: { label: string; key: string }[] = [
-    { label: "Close", key: "close" },
-    { label: "EMA 20", key: "ema20" },
-    { label: "EMA 50", key: "ema50" },
-    { label: "RSI 14", key: "rsi14" },
-    { label: "MACD", key: "macd" },
-    { label: "MACD signal", key: "macd_signal" },
+  const ctx = signal.analysis || {};
+  const items: { label: string; value: number | null | undefined }[] = [
+    { label: "Close", value: signal.analysis.latest_price },
+    { label: "EMA 20", value: ctx.ema20 },
+    { label: "EMA 50", value: ctx.ema50 },
+    { label: "EMA 200", value: ctx.ema200 },
+    { label: "RSI 14", value: ctx.rsi14 },
   ];
 
   return (
@@ -37,20 +36,17 @@ export const MetricsPanel: React.FC<Props> = ({ signal }) => {
         Indicator snapshot
       </h2>
       <div className="grid grid-cols-2 gap-2 text-xs">
-        {items.map((item) => {
-          const val = ctx[item.key];
-          return (
-            <div
-              key={item.key}
-              className="flex items-center justify-between rounded-xl bg-slate-900/80 px-3 py-2"
-            >
-              <span className="text-slate-400">{item.label}</span>
-              <span className="text-slate-100">
-                {typeof val === "number" ? val.toFixed(2) : "—"}
-              </span>
-            </div>
-          );
-        })}
+        {items.map((item) => (
+          <div
+            key={item.label}
+            className="flex items-center justify-between rounded-xl bg-slate-900/80 px-3 py-2"
+          >
+            <span className="text-slate-400">{item.label}</span>
+            <span className="text-slate-100">
+              {typeof item.value === "number" ? item.value.toFixed(2) : "—"}
+            </span>
+          </div>
+        ))}
       </div>
       <p className="mt-3 text-[11px] text-slate-500">
         Indicators come from recent candles and help the engine decide if it is

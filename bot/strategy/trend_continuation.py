@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import List
 
 import pandas as pd
 
 from bot.models import (
+    CandidateTrade,
     MarketRegime,
     RiskRating,
-    TradeAction,
-    TradeSignal,
+    SetupType,
+    TradeDirection,
 )
 
 
@@ -23,18 +24,18 @@ class TrendContinuationStrategy:
     regimes = [MarketRegime.TREND_UP]
     risk_profile = "moderate"
 
-    def generate_signal(
+    def generate_candidates(
         self,
         df: pd.DataFrame,
         symbol: str,
         timeframe: str,
         regime: MarketRegime,
-    ) -> Optional[TradeSignal]:
-        """Return a TradeSignal if a valid trend continuation setup exists."""
+    ) -> List[CandidateTrade]:
+        """Return candidate trades when a trend continuation setup is forming."""
 
         if regime != MarketRegime.TREND_UP:
             print("[TrendContinuation] Skipped: regime not TREND_UP")
-            return None
+            return []
 
         last = df.iloc[-1]
         close = float(last["close"])
@@ -52,9 +53,6 @@ class TrendContinuationStrategy:
 
         # 1) Trend filter: EMAs stacked or at least 20 > 50 and price above 20
         ema_trend_ok = (ema20 > ema50 > ema200) and ema20_slope > 0.0005
-        if not ema_trend_ok:
-            print("[TrendContinuation] Skipped: EMA alignment or slope weak")
-            return None
 
         # 2) Pullback zone: within a soft band around EMA20 / EMA50
         pullback_band_low = min(ema20, ema50) * 0.985
@@ -64,12 +62,14 @@ class TrendContinuationStrategy:
         # 3) RSI in "healthy" zone: not oversold, not crazy overbought
         rsi_ok = 50 <= rsi <= 68
 
-        if not (pullback_ok and rsi_ok):
-            print(
-                "[TrendContinuation] Skipped: pullback or RSI filter failed",
-                {"pullback_ok": pullback_ok, "rsi": rsi},
-            )
-            return None
+        base_quality = 0.4
+        if ema_trend_ok:
+            base_quality += 0.25
+        if pullback_ok:
+            base_quality += 0.2
+        if rsi_ok:
+            base_quality += 0.1
+        base_quality += min(max(ema20_slope * 10, 0), 0.15)
 
         def _atr(data: pd.DataFrame, period: int = 14) -> float:
             highs = data["high"]
@@ -100,27 +100,21 @@ class TrendContinuationStrategy:
         tp2 = close + (atr * 2.4 if atr > 0 else close * 0.04)
         entry_zone = (pullback_band_low, max(pullback_band_high, ema50 * 1.01))
 
-        confidence = min(0.9, 0.65 + ema20_slope * 8)
+        quality = min(max(base_quality, 0.0), 1.0)
 
-        return TradeSignal(
-            symbol=symbol,
-            timeframe=timeframe,
-            action=TradeAction.BUY,
-            strategy_name=self.name,
-            entry_zone=entry_zone,
-            stop_loss=sl,
-            take_profits=[tp1, tp2],
-            risk_rating=RiskRating.MEDIUM,
-            confidence_score=confidence,
-            regime=regime,
-            context={
-                "close": close,
-                "ema20": ema20,
-                "ema50": ema50,
-                "ema200": ema200,
-                "rsi14": rsi,
-                "ema20_slope": ema20_slope,
-                "ema50_slope": ema50_slope,
-                "atr14": atr,
-            },
-        )
+        return [
+            CandidateTrade(
+                direction=TradeDirection.LONG,
+                setup_type=SetupType.PULLBACK,
+                entry_zone=entry_zone,
+                stop_loss=sl,
+                take_profits=[tp1, tp2],
+                quality_score=quality,
+                risk_rating=RiskRating.MEDIUM,
+                notes=(
+                    "Uptrend with EMAs aligned and a pullback near the fast averages. "
+                    "RSI in healthy zone; looking for continuation."
+                ),
+                strategy_name=self.name,
+            )
+        ]
